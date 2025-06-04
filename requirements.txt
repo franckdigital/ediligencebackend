@@ -1,0 +1,14 @@
+Django>=4.0
+mysqlclient>=2.0
+PyMySQL>=1.0
+pytz
+python-dotenv
+# Auth & API
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
+# Optionnel pour l'admin amélioré
+# django-admin-interface
+# Pour les tests
+pytest
+pytest-django
