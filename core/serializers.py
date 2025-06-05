@@ -367,7 +367,6 @@ class CourrierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Courrier
         fields = '__all__'
-{{ ... }}
         # Si tu veux être explicite :
         # fields = ['id', 'reference', 'expediteur', 'objet', 'date_reception', 'service', 'categorie', 'fichier_joint', 'fichier_joint_url', 'created_at', 'updated_at']
 
