@@ -79,6 +79,7 @@ class Service(models.Model):
         super().save(*args, **kwargs)
 
 class UserProfile(models.Model):
+    empreinte_hash = models.CharField(max_length=255, null=True, blank=True)  # Empreinte digitale
     entreprise = models.ForeignKey('Entreprise', on_delete=models.CASCADE, null=True, blank=True, related_name='utilisateurs')
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),

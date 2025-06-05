@@ -175,7 +175,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             service = validated_data.pop('service', None)
             validated_data.pop('password2')
             user = User.objects.create_user(**validated_data)
-            UserProfile.objects.create(user=user, role=role, service=service)
+            UserProfile.objects.create(user=user, role=role, service=service, empreinte_hash=validated_data.get('fingerprint_hash'))
             print('User created successfully')
             return user
         except Exception as e:
@@ -348,38 +348,17 @@ class AdminUserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop('role')
         service = validated_data.pop('service', None)
+        empreinte_hash = validated_data.pop('fingerprint_hash', None)
         validated_data['password'] = make_password(validated_data.get('password'))
         user = User.objects.create(**validated_data)
-        
         # Create user profile
         UserProfile.objects.create(
             user=user,
             role=role,
-            service=service
+            service=service,
+            empreinte_hash=empreinte_hash
         )
         return user
-
-    def update(self, instance, validated_data):
-        if 'password' in validated_data:
-            password = validated_data.pop('password')
-            instance.set_password(password)
-        
-        role = validated_data.pop('role', None)
-        service = validated_data.pop('service', None)
-        
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        if role or service is not None:
-            profile = instance.profile
-            if role:
-                profile.role = role
-            if service is not None:
-                profile.service = service
-            profile.save()
-        
-        return instance
 
 class CourrierSerializer(serializers.ModelSerializer):
     class Meta:

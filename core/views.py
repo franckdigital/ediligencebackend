@@ -145,29 +145,37 @@ class LoginView(APIView):
 
     def post(self, request, *args, **kwargs):
         print("LOGIN VIEW CALLED", request.data)
-        username_or_email = request.data.get('username')
-        password = request.data.get('password')
-        print(f"Tentative de login pour : {username_or_email}")
-
-        from django.contrib.auth import get_user_model, authenticate
-        User = get_user_model()
-        user = authenticate(username=username_or_email, password=password)
-        print("AUTHENTICATE 1:", user)
-        if not user:
-            # Si username_or_email est un email, essayer de trouver le user correspondant
+        fingerprint_hash = request.data.get('fingerprint_hash')
+        if fingerprint_hash:
+            from .models import UserProfile
             try:
-                user_obj = User.objects.get(email=username_or_email)
-                print("USER OBJ (par email):", user_obj)
-                user = authenticate(username=user_obj.username, password=password)
-                print("AUTHENTICATE 2:", user)
-            except User.DoesNotExist:
-                print("NO USER OBJ pour cet email")
-                user = None
-
-        if not user:
-            print("ECHEC AUTH: credentials invalid")
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
+                profile = UserProfile.objects.get(empreinte_hash=fingerprint_hash)
+                user = profile.user
+                print("AUTH VIA FINGERPRINT: ", user)
+            except UserProfile.DoesNotExist:
+                print("ECHEC AUTH: empreinte non reconnue")
+                return Response({'error': 'Empreinte non reconnue'}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            username_or_email = request.data.get('username')
+            password = request.data.get('password')
+            print(f"Tentative de login pour : {username_or_email}")
+            from django.contrib.auth import get_user_model, authenticate
+            User = get_user_model()
+            user = authenticate(username=username_or_email, password=password)
+            print("AUTHENTICATE 1:", user)
+            if not user:
+                # Si username_or_email est un email, essayer de trouver le user correspondant
+                try:
+                    user_obj = User.objects.get(email=username_or_email)
+                    print("USER OBJ (par email):", user_obj)
+                    user = authenticate(username=user_obj.username, password=password)
+                    print("AUTHENTICATE 2:", user)
+                except User.DoesNotExist:
+                    print("NO USER OBJ pour cet email")
+                    user = None
+            if not user:
+                print("ECHEC AUTH: credentials invalid")
+                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
         token, _ = Token.objects.get_or_create(user=user)
         try:
             profile = user.profile
