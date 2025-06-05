@@ -347,6 +347,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'password', 'email', 'first_name', 'last_name', 'role', 'service', 'fingerprint_hash')
         extra_kwargs = {
             'first_name': {'required': True},
+        }
+
     def create(self, validated_data):
         role = validated_data.pop('role')
         service = validated_data.pop('service', None)
