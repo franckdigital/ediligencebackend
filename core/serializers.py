@@ -380,6 +380,7 @@ class CourrierSerializer(serializers.ModelSerializer):
             return url
         return None
 
+
 class DiligenceSerializer(serializers.ModelSerializer):
     agents = UserSerializer(many=True, read_only=True)
     agents_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
