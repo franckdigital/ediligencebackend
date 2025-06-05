@@ -142,10 +142,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True, required=True)
     role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES, default='AGENT')
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), required=False, allow_null=True)
+    fingerprint_hash = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 'role', 'service')
+        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 'role', 'service', 'fingerprint_hash')
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
@@ -335,10 +336,11 @@ class AdminUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True)
     role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES, default='USER')
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), required=False, allow_null=True)
+    fingerprint_hash = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'password', 'email', 'first_name', 'last_name', 'role', 'service')
+        fields = ('id', 'username', 'password', 'email', 'first_name', 'last_name', 'role', 'service', 'fingerprint_hash')
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
