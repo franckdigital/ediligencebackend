@@ -175,8 +175,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             role = validated_data.pop('role')
             service = validated_data.pop('service', None)
             validated_data.pop('password2')
+            fingerprint_hash = validated_data.pop('fingerprint_hash', None)
             user = User.objects.create_user(**validated_data)
-            UserProfile.objects.create(user=user, role=role, service=service, empreinte_hash=validated_data.get('fingerprint_hash'))
+            UserProfile.objects.create(user=user, role=role, service=service, empreinte_hash=fingerprint_hash)
             print('User created successfully')
             return user
         except Exception as e:
@@ -343,22 +344,17 @@ class AdminUserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username', 'password', 'email', 'first_name', 'last_name', 'role', 'service', 'fingerprint_hash')
         extra_kwargs = {
             'first_name': {'required': True},
-            'last_name': {'required': True},
-            'email': {'required': True}
-        }
-
     def create(self, validated_data):
         role = validated_data.pop('role')
         service = validated_data.pop('service', None)
-        empreinte_hash = validated_data.pop('fingerprint_hash', None)
+        validated_data.pop('fingerprint_hash', None)  # Supprimer le champ fingerprint_hash
         validated_data['password'] = make_password(validated_data.get('password'))
         user = User.objects.create(**validated_data)
         # Create user profile
         UserProfile.objects.create(
             user=user,
             role=role,
-            service=service,
-            empreinte_hash=empreinte_hash
+            service=service
         )
         return user
 
@@ -366,6 +362,7 @@ class CourrierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Courrier
         fields = '__all__'
+{{ ... }}
         # Si tu veux être explicite :
         # fields = ['id', 'reference', 'expediteur', 'objet', 'date_reception', 'service', 'categorie', 'fichier_joint', 'fichier_joint_url', 'created_at', 'updated_at']
 
