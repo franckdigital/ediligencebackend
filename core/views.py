@@ -169,7 +169,10 @@ class LoginView(APIView):
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
         token, _ = Token.objects.get_or_create(user=user)
-        profile = user.profile
+        try:
+            profile = user.profile
+        except Exception:
+            return Response({'error': 'Profil utilisateur manquant'}, status=500)
         return Response({
             'token': token.key,
             'role': profile.role,
