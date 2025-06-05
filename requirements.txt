@@ -1,5 +1,4 @@
 Django>=4.0
-mysqlclient>=2.0
 PyMySQL>=1.0
 pytz
 python-dotenv
