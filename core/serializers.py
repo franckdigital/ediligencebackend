@@ -154,34 +154,37 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        print('Validating registration data:', attrs)
-        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'[UserRegistrationSerializer] Validation data: {attrs}')
         if attrs['password'] != attrs['password2']:
-            print('Password mismatch error')
+            logger.error('[UserRegistrationSerializer] Password mismatch error')
             raise serializers.ValidationError({"password": "Password fields didn't match."})
-        
         try:
             validate_password(attrs['password'])
         except ValidationError as e:
-            print('Password validation error:', e)
+            logger.error(f'[UserRegistrationSerializer] Password validation error: {e}')
             raise serializers.ValidationError({"password": list(e)})
-        
-        print('Validation successful')
+        logger.info('[UserRegistrationSerializer] Validation successful')
         return attrs
 
     def create(self, validated_data):
-        print('Creating user with data:', validated_data)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'[UserRegistrationSerializer] Creating user with data: {validated_data}')
         try:
             role = validated_data.pop('role')
             service = validated_data.pop('service', None)
             validated_data.pop('password2')
             fingerprint_hash = validated_data.pop('fingerprint_hash', None)
+            logger.debug(f'[UserRegistrationSerializer] Values after pop: role={role}, service={service}, fingerprint_hash={fingerprint_hash}')
             user = User.objects.create_user(**validated_data)
+            logger.info(f'[UserRegistrationSerializer] User object created: {user}')
             UserProfile.objects.create(user=user, role=role, service=service, empreinte_hash=fingerprint_hash)
-            print('User created successfully')
+            logger.info('[UserRegistrationSerializer] UserProfile created successfully')
             return user
         except Exception as e:
-            print('Error creating user:', str(e))
+            logger.error(f'[UserRegistrationSerializer] Error creating user: {str(e)}', exc_info=True)
             raise serializers.ValidationError(str(e))
 
 class DirectionSerializer(serializers.ModelSerializer):
