@@ -273,7 +273,7 @@ class CourrierSerializer(serializers.ModelSerializer):
                         validated_data['date_reception'] = datetime.strptime(date_str, '%Y-%m-%d').date()
                     except ValueError as e:
                         print('Error parsing date:', e)
-                        raise serializers.ValidationError({'date_reception': 'Format de date invalide'})
+                        raise serializers.ValidationError({'date_reception': 'Le format de date invalide'})
             
             # Si le service est dans validated_data, on le retire car on va le gérer manuellement
             validated_data.pop('service', None)
