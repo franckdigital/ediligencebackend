@@ -343,17 +343,27 @@ class AgentRegistrationView(APIView):
     authentication_classes = []
 
     def post(self, request, *args, **kwargs):
-        serializer = UserRegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            return Response({
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'role': user.profile.role
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        try:
+            serializer = UserRegistrationSerializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.save()
+                return Response({
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'role': user.profile.role
+                }, status=status.HTTP_201_CREATED)
+            logger.error(f'[AgentRegistrationView] Registration validation errors: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f'[AgentRegistrationView] Unhandled exception during registration: {str(e)}')
+            logger.error(traceback.format_exc())
+            return Response({'detail': 'Internal server error. Please contact support.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class DirectionViewSet(viewsets.ModelViewSet):
     queryset = Direction.objects.all()
