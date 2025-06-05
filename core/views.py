@@ -140,11 +140,12 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(main_serializer.data)
 
 class LoginView(APIView):
-    authentication_classes = []  # AUCUNE authentification requise
+    authentication_classes = []  # Désactive toute auth préalable
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         print("LOGIN VIEW CALLED", request.data)
+        print("Tentative de login détectée")
         username = request.data.get('username')
         password = request.data.get('password')
 
