@@ -145,7 +145,7 @@ class LoginView(APIView):
 
     def post(self, request, *args, **kwargs):
         print("LOGIN VIEW CALLED", request.data)
-        print("Tentative de login détectée")
+        print("Tentative de login détecté")
         username = request.data.get('username')
         password = request.data.get('password')
 
