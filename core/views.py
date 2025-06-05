@@ -140,6 +140,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(main_serializer.data)
 
 class LoginView(APIView):
+    authentication_classes = []  # AUCUNE authentification requise
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
