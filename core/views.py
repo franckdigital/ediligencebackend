@@ -152,12 +152,15 @@ class LoginView(APIView):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         user = authenticate(username=username, password=password)
+        print("AUTHENTICATE 1:", user)
         if not user:
-            # Essaye avec l'email si username a échoué
             try:
                 user_obj = User.objects.get(email=username)
+                print("USER OBJ:", user_obj)
                 user = authenticate(username=user_obj.username, password=password)
+                print("AUTHENTICATE 2:", user)
             except User.DoesNotExist:
+                print("NO USER OBJ")
                 user = None
 
         if not user:
