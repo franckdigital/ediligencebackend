@@ -29,6 +29,18 @@ from .serializers import DiligenceSerializer, DirectionSerializer, ServiceSerial
 
 logger = logging.getLogger(__name__)
 
+class SetFingerprintView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        fingerprint_hash = request.data.get('fingerprint_hash')
+        if not fingerprint_hash:
+            return Response({'error': 'Aucun hash fourni'}, status=status.HTTP_400_BAD_REQUEST)
+        profile = request.user.profile
+        profile.empreinte_hash = fingerprint_hash
+        profile.save()
+        return Response({'success': True, 'empreinte_hash': fingerprint_hash})
+
 from rest_framework.authentication import TokenAuthentication
 
 class ImputationFileViewSet(viewsets.ModelViewSet):

@@ -101,11 +101,11 @@ WSGI_APPLICATION = 'ediligence.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        #'NAME': 'ediligence',
-        'NAME': 'diligence',
+        'NAME': 'ediligence',
+        #'NAME': 'diligence',
         'USER': 'root',
-        #'PASSWORD': 'M@nager@2025',
-        'PASSWORD': 'root',
+        'PASSWORD': 'M@nager@2025',
+        #'PASSWORD': 'root',
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {
