@@ -1,5 +1,6 @@
 from rest_framework import routers
 from .views import (
+    SetFingerprintView,
     LieuxEntrepriseView,
     AdminRegistrationView, UserProfileView, LoginView, UserViewSet,
     DirectionViewSet, ServiceViewSet, CourrierViewSet, DiligenceViewSet,
@@ -29,6 +30,7 @@ router.register(r'commentaires', CommentaireViewSet)
 router.register(r'fichiers', FichierViewSet)
 
 urlpatterns = [
+    path('set-fingerprint/', SetFingerprintView.as_view(), name='set-fingerprint'),
     path('lieux-entreprise/', LieuxEntrepriseView.as_view(), name='lieux-entreprise'),
     path('stats/presence/', PresenceStatsAPIView.as_view(), name='presence-stats'),
     path('', include(router.urls)),
