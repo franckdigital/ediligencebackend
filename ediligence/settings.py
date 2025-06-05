@@ -18,7 +18,12 @@ SECRET_KEY = 'django-insecure-n5e0po2v6y9=z5h#)p^f@!q3v3&amp;y=0g4x#f8_h=w=k#6z5
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "e-diligence.numerix.digital",
+    "localhost",
+    "127.0.0.1",
+    # ajoute d'autres domaines si besoin
+]
 
 # Application definition
 
