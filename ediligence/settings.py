@@ -101,7 +101,7 @@ WSGI_APPLICATION = 'ediligence.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'diligence',
+        'NAME': 'ediligence',
         'USER': 'root',
         'PASSWORD': 'M@nager@2025',
         #'PASSWORD': 'root',
