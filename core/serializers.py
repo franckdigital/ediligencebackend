@@ -40,21 +40,151 @@ class TacheHistoriqueSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    qr_code_url = serializers.SerializerMethodField()
+
+    def get_qr_code_url(self, obj):
+        if obj.qr_code:
+            return obj.qr_code.url
+        return None
+
     class Meta:
         model = UserProfile
-        fields = ['role', 'service']
+        fields = ['role', 'service', 'qr_code_url']
+
+from .models import Service
+
+class ServiceSerializer(serializers.ModelSerializer):
+    direction_nom = serializers.CharField(source='direction.nom', read_only=True)
+    class Meta:
+        model = Service
+        fields = ['id', 'nom', 'description', 'direction', 'direction_nom']
 
 class UserSerializer(serializers.ModelSerializer):
+    service_obj = ServiceSerializer(source='profile.service', read_only=True)
+    service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), source='profile.service', allow_null=True, required=False)
+    matricule = serializers.CharField(source='profile.matricule', allow_null=True, allow_blank=True, required=False)
+    role = serializers.CharField(source='profile.role')
+    role_display = serializers.CharField(source='profile.get_role_display', read_only=True)
+    qr_code_url = serializers.SerializerMethodField()
+
+
     role = serializers.SerializerMethodField(read_only=True)
     role_display = serializers.SerializerMethodField(read_only=True)
-    service = serializers.SerializerMethodField(read_only=True)
+    service = serializers.PrimaryKeyRelatedField(source='profile.service', queryset=Service.objects.all(), required=False, allow_null=True)
     direction = serializers.SerializerMethodField(read_only=True)
+    matricule = serializers.CharField(source='profile.matricule', required=False, allow_blank=True, allow_null=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    qr_code_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
-                 'role', 'role_display', 'service', 'direction']
-        read_only_fields = fields
+                 'role', 'role_display', 'service', 'service_obj', 'direction', 'matricule', 'qr_code_url', 'password']
+        read_only_fields = ['id', 'role_display', 'direction', 'qr_code_url', 'service_obj']
+
+    def get_qr_code_url(self, obj):
+        if hasattr(obj, 'profile') and obj.profile.qr_code:
+            return obj.profile.qr_code.url
+        return None
+
+    def update(self, instance, validated_data):
+        import logging
+        logger = logging.getLogger(__name__)
+        profile_data = validated_data.pop('profile', {}) if 'profile' in validated_data else {}
+        # Récupération du matricule
+        matricule = None
+        if 'matricule' in profile_data:
+            matricule = profile_data['matricule']
+        elif 'matricule' in validated_data:
+            matricule = validated_data.pop('matricule')
+        # Récupération du service
+        service = None
+        if 'service' in profile_data:
+            service = profile_data['service']
+        elif 'service' in validated_data:
+            service = validated_data.pop('service')
+        # Récupération du rôle
+        role = None
+        if 'role' in profile_data:
+            role = profile_data['role']
+        elif 'role' in validated_data:
+            role = validated_data.pop('role')
+        # Mot de passe
+        password = validated_data.pop('password', None)
+        # Update user fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            logger.info(f'[UserSerializer] Mise à jour du mot de passe pour {instance.username}')
+            instance.set_password(password)
+        instance.save()
+        # Update profile fields
+        profile = getattr(instance, 'profile', None)
+        qr_code_needs_update = False
+        if profile:
+            # Matricule
+            if matricule is not None and matricule != profile.matricule:
+                logger.info(f'[UserSerializer] Mise à jour du matricule: {profile.matricule} -> {matricule}')
+                profile.matricule = str(matricule)
+                qr_code_needs_update = True
+            # Service
+            if service is not None:
+                from .models import Service
+                if isinstance(service, int):
+                    try:
+                        service_obj = Service.objects.get(pk=service)
+                        logger.info(f'[UserSerializer] Mise à jour du service: {profile.service} -> {service_obj}')
+                        profile.service = service_obj
+                    except Service.DoesNotExist:
+                        logger.warning(f'[UserSerializer] Service id {service} introuvable')
+                else:
+                    logger.info(f'[UserSerializer] Mise à jour du service: {profile.service} -> {service}')
+                    profile.service = service
+            # Role
+            if role is not None and role != profile.role:
+                logger.info(f'[UserSerializer] Mise à jour du rôle: {profile.role} -> {role}')
+                profile.role = role
+            # Correction finale du rôle si présent dans le payload à plat
+            if hasattr(self, 'initial_data') and 'role' in self.initial_data:
+                new_role = self.initial_data['role']
+                if new_role != profile.role:
+                    logger.info(f'[UserSerializer] Correction du rôle: {profile.role} -> {new_role}')
+                    profile.role = new_role
+            profile.save()
+            if qr_code_needs_update:
+                try:
+                    import qrcode
+                    from io import BytesIO
+                    from django.core.files.base import ContentFile
+                    qr_content = f"{profile.matricule or instance.username}"
+                    from PIL import Image, ImageDraw, ImageFont
+                    img = qrcode.make(qr_content)
+                    matricule_text = profile.matricule or instance.username
+                    img = img.convert('RGB')
+                    draw = ImageDraw.Draw(img)
+                    font = None
+                    try:
+                        font = ImageFont.truetype("arial.ttf", 18)
+                    except:
+                        font = ImageFont.load_default()
+                    bbox = draw.textbbox((0, 0), matricule_text, font=font)
+                    text_w = bbox[2] - bbox[0]
+                    text_h = bbox[3] - bbox[1]
+                    # Position: bottom-right corner with padding
+                    padding = 6
+                    x = img.width - text_w - padding
+                    y = img.height - text_h - padding
+                    # Draw a white rectangle for readability
+                    draw.rectangle([x - 2, y - 2, x + text_w + 2, y + text_h + 2], fill='white')
+                    draw.text((x, y), matricule_text, fill='black', font=font)
+                    buffer = BytesIO()
+                    img.save(buffer, format="PNG")
+                    file_name = f"qrcodes/agent_{profile.matricule or profile.id}.png"
+                    profile.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=True)
+                    logger.info(f'[UserSerializer] QR code régénéré pour {profile.matricule}')
+                except Exception as e:
+                    logger.error(f'[UserSerializer] Error regenerating QR code: {str(e)}', exc_info=True)
+        return instance
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -93,13 +223,18 @@ class UserSerializer(serializers.ModelSerializer):
 # --- PresenceSerializer doit être défini APRÈS UserSerializer pour éviter l'import circulaire ---
 class PresenceSerializer(serializers.ModelSerializer):
     agent = serializers.PrimaryKeyRelatedField(read_only=True)
-    agent_details = UserSerializer(source='agent', read_only=True)
+    from .models import Agent
+    class AgentSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = Agent
+            fields = ['id', 'nom', 'prenom', 'matricule', 'poste', 'service', 'role']
+    agent_details = AgentSerializer(source='agent', read_only=True)
 
     class Meta:
         model = Presence
         fields = [
             'id', 'agent', 'agent_details', 'date_presence', 'heure_arrivee', 'heure_depart',
-            'statut', 'empreinte_hash', 'latitude', 'longitude', 'localisation_valide',
+            'statut', 'qr_code_data', 'latitude', 'longitude', 'localisation_valide',
             'commentaire', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide', 'statut']
@@ -142,11 +277,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True, required=True)
     role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES, default='AGENT')
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), required=False, allow_null=True)
-    fingerprint_hash = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    matricule = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = User
-        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 'role', 'service', 'fingerprint_hash')
+        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 'role', 'service', 'matricule')
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
@@ -170,18 +305,44 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         import logging
+        import qrcode
+        from io import BytesIO
+        from django.core.files.base import ContentFile
         logger = logging.getLogger(__name__)
         logger.info(f'[UserRegistrationSerializer] Creating user with data: {validated_data}')
         try:
             role = validated_data.pop('role')
             service = validated_data.pop('service', None)
+            matricule = validated_data.pop('matricule', None)
             validated_data.pop('password2')
-            fingerprint_hash = validated_data.pop('fingerprint_hash', None)
-            logger.debug(f'[UserRegistrationSerializer] Values after pop: role={role}, service={service}, fingerprint_hash={fingerprint_hash}')
+            logger.debug(f'[UserRegistrationSerializer] Values after pop: role={role}, service={service}, matricule={matricule}')
             user = User.objects.create_user(**validated_data)
             logger.info(f'[UserRegistrationSerializer] User object created: {user}')
-            UserProfile.objects.create(user=user, role=role, service=service, empreinte_hash=fingerprint_hash)
-            logger.info('[UserRegistrationSerializer] UserProfile created successfully')
+            profile = UserProfile.objects.create(user=user, role=role, service=service, matricule=matricule)
+            qr_content = f"{matricule or getattr(profile, 'matricule', user.username)}"
+            import qrcode
+            from PIL import Image, ImageDraw, ImageFont
+            img = qrcode.make(qr_content)
+            matricule_text = matricule or getattr(profile, 'matricule', user.username)
+            img = img.convert('RGB')
+            draw = ImageDraw.Draw(img)
+            font = None
+            try:
+                font = ImageFont.truetype("arial.ttf", 18)
+            except:
+                font = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), matricule_text, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            new_img = Image.new('RGB', (img.width, img.height + text_h + 10), 'white')
+            new_img.paste(img, (0, 0))
+            draw = ImageDraw.Draw(new_img)
+            draw.text(((img.width - text_w) // 2, img.height + 5), matricule_text, fill='black', font=font)
+            buffer = BytesIO()
+            new_img.save(buffer, format="PNG")
+            file_name = f"qrcodes/agent_{matricule or profile.id}.png"
+            profile.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=True)
+            logger.info('[UserRegistrationSerializer] UserProfile and QR code created successfully')
             return user
         except Exception as e:
             logger.error(f'[UserRegistrationSerializer] Error creating user: {str(e)}', exc_info=True)
@@ -340,11 +501,10 @@ class AdminUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True)
     role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES, default='USER')
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), required=False, allow_null=True)
-    fingerprint_hash = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'password', 'email', 'first_name', 'last_name', 'role', 'service', 'fingerprint_hash')
+        fields = ('id', 'username', 'password', 'email', 'first_name', 'last_name', 'role', 'service')
         extra_kwargs = {
             'first_name': {'required': True},
         }
@@ -352,7 +512,6 @@ class AdminUserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop('role')
         service = validated_data.pop('service', None)
-        validated_data.pop('fingerprint_hash', None)  # Supprimer le champ fingerprint_hash
         validated_data['password'] = make_password(validated_data.get('password'))
         user = User.objects.create(**validated_data)
         # Create user profile

@@ -1,10 +1,11 @@
 from rest_framework import routers
 from .views import (
     SetFingerprintView,
-    LieuxEntrepriseView,
+
     AdminRegistrationView, UserProfileView, LoginView, UserViewSet,
     DirectionViewSet, ServiceViewSet, CourrierViewSet, DiligenceViewSet,
-    DiligenceDownloadFichierView, AgentRegistrationView, ImputationFileViewSet
+    DiligenceDownloadFichierView, AgentRegistrationView, ImputationFileViewSet,
+    userprofile_qrcode, ImputationAccessViewSet, RolePermissionViewSet, PresenceViewSet
 )
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet
 from django.urls import path, include
@@ -31,7 +32,7 @@ router.register(r'fichiers', FichierViewSet)
 
 urlpatterns = [
     path('set-fingerprint/', SetFingerprintView.as_view(), name='set-fingerprint'),
-    path('lieux-entreprise/', LieuxEntrepriseView.as_view(), name='lieux-entreprise'),
+
     path('stats/presence/', PresenceStatsAPIView.as_view(), name='presence-stats'),
     path('', include(router.urls)),
     path('auth/register/', AgentRegistrationView.as_view(), name='register'),
@@ -48,6 +49,8 @@ urlpatterns = [
     path('taches/<int:pk>/historique/',
          __import__('core.task_views').task_views.tache_historique,
          name='tache_historique'),
+    path('api/userprofiles/<int:user_id>/qrcode/', userprofile_qrcode, name='userprofile_qrcode'),
+
 ]
 
 

@@ -78,9 +78,11 @@ class Service(models.Model):
         self.updated_at = timezone.now()
         super().save(*args, **kwargs)
 
+import secrets
+
+import secrets
+
 class UserProfile(models.Model):
-    empreinte_hash = models.CharField(max_length=255, null=True, blank=True)  # Empreinte digitale
-    entreprise = models.ForeignKey('Entreprise', on_delete=models.CASCADE, null=True, blank=True, related_name='utilisateurs')
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),
         ('DIRECTEUR', 'Directeur'),  # Peut voir toutes les diligences de sa direction
@@ -91,6 +93,7 @@ class UserProfile(models.Model):
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    matricule = models.CharField(max_length=64, blank=True, null=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
     service = models.ForeignKey(
         Service,
@@ -102,11 +105,20 @@ class UserProfile(models.Model):
     )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
+    qr_secret = models.CharField(
+        max_length=64,
+        unique=True,
+        editable=False,
+        help_text="Clé secrète pour QR code signé"
+    )
+    qr_code = models.ImageField(upload_to='qrcodes/', blank=True, null=True, help_text="QR code de l'agent")
 
     def save(self, *args, **kwargs):
         if not self.created_at:
             self.created_at = timezone.now()
         self.updated_at = timezone.now()
+        if not self.qr_secret or self.qr_secret == 'changeme':
+            self.qr_secret = secrets.token_hex(32)
         super().save(*args, **kwargs)
 
     class Meta:
@@ -262,7 +274,7 @@ class EtapeEvenement(models.Model):
     #horodatage = models.DateTimeField(auto_now_add=True)
 
 class Prestataire(models.Model):
-    nom_entreprise = models.CharField(max_length=255)
+    
     secteur_activite = models.CharField(max_length=255)
     zone_geographique = models.CharField(max_length=255)
     email = models.EmailField()
@@ -396,27 +408,44 @@ class TacheHistorique(models.Model):
     def __str__(self):
         return f"{self.tache} - {self.action} - {self.date.strftime('%Y-%m-%d %H:%M')}"
 
-# --- Entreprise (multi-entreprises) ---
-class Entreprise(models.Model):
-    nom = models.CharField(max_length=100)
-    # Ajoute d'autres champs si besoin (adresse, etc)
+
+# --- Modèle Agent (système multi-sites, QR, connexion, etc.) ---
+from django.contrib.auth.models import User
+
+class Agent(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_profile')
+    nom = models.CharField(max_length=255)
+    prenom = models.CharField(max_length=255, blank=True, null=True)
+    telephone = models.CharField(max_length=30, blank=True, null=True)
+    matricule = models.CharField(max_length=100, unique=True)
+    qr_code = models.TextField(blank=True, null=True)  # base64 ou URL
+    poste = models.CharField(max_length=100)
+    service = models.ForeignKey('Service', on_delete=models.CASCADE)
+    bureau = models.CharField(max_length=100, blank=True, null=True)  # Nom ou code du site/bureau
+    latitude_centre = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude_centre = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    rayon_metres = models.IntegerField(null=True, blank=True, help_text="Rayon de la zone autorisée en mètres")
+    ROLE_CHOICES = [
+        ('ADMIN', 'Admin'),
+        ('DIRECTEUR', 'Directeur'),
+        ('SUPERIEUR', 'Superieur'),
+        ('AGENT', 'Agent'),
+        ('SECRETAIRE', 'Secretaire'),
+        ('PRESTATAIRE', 'Prestataire'),
+    ]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    def save(self, *args, **kwargs):
+        if not self.created_at:
+            self.created_at = timezone.now()
+        self.updated_at = timezone.now()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return self.nom
+        return f"{self.nom} {self.prenom or ''} ({self.role})"
 
-# --- LieuEntreprise (coordonnées du siège modifiables en admin, lié à une entreprise) ---
-class LieuEntreprise(models.Model):
-    entreprise = models.ForeignKey(Entreprise, on_delete=models.CASCADE, related_name='lieux', null=True, blank=True)
-    nom = models.CharField(max_length=100, default="Siège")
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    seuil_metres = models.FloatField(default=50)
-
-    def __str__(self):
-        return f"{self.nom} - {self.entreprise.nom}"
-
-# --- Presence (pointage/présence des agents) ---
-from django.core.validators import MinValueValidator, MaxValueValidator
-from decimal import Decimal
 
 class Presence(models.Model):
     STATUT_CHOICES = [
@@ -426,12 +455,12 @@ class Presence(models.Model):
         ('permission accordée', 'Permission accordée'),
     ]
     # id: UUID ou BigAutoField (par défaut)
-    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='presences')
+    agent = models.ForeignKey('Agent', on_delete=models.CASCADE, related_name='presences')
     date_presence = models.DateField()
     heure_arrivee = models.TimeField(null=True, blank=True)
     heure_depart = models.TimeField(null=True, blank=True)
     statut = models.CharField(max_length=32, choices=STATUT_CHOICES)
-    empreinte_hash = models.TextField(help_text="Empreinte biométrique hashée, jamais l'image brute")
+    qr_code_data = models.TextField(null=True, blank=True, help_text="Donnée brute du QR code scannée")
     latitude = models.DecimalField(max_digits=10, decimal_places=6)
     longitude = models.DecimalField(max_digits=10, decimal_places=6)
     localisation_valide = models.BooleanField(default=False)

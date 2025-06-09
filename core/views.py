@@ -25,9 +25,51 @@ from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
 from .models import *
 from .serializers import DiligenceSerializer, DirectionSerializer, ServiceSerializer, CourrierSerializer, UserSerializer, UserRegistrationSerializer, BasicUserSerializer, ImputationFileSerializer
-
+import qrcode
+import hmac
+import hashlib
+from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def userprofile_qrcode(request, user_id):
+    profile = UserProfile.objects.select_related('user').get(user__id=user_id)
+    agent = profile.user
+    matricule = getattr(agent, 'matricule', None) or getattr(agent, 'username', '')
+
+    expires = int((timezone.now() + timedelta(hours=24)).timestamp())
+    payload = f"{agent.id}:{expires}"
+    signature = hmac.new(
+        profile.qr_secret.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    qr_data = f"{payload}:{signature}"
+
+    qr_img = qrcode.make(qr_data).convert("RGB")
+    width, height = qr_img.size
+
+    font_size = 24
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        font = ImageFont.load_default()
+    text_width, text_height = font.getsize(matricule)
+    total_height = height + text_height + 10
+
+    final_img = Image.new("RGB", (width, total_height), "white")
+    final_img.paste(qr_img, (0, 0))
+
+    draw = ImageDraw.Draw(final_img)
+    text_x = (width - text_width) // 2
+    draw.text((text_x, height + 5), matricule, fill="black", font=font)
+
+    response = HttpResponse(content_type="image/png")
+    final_img.save(response, "PNG")
+    return response
+
 
 class SetFingerprintView(APIView):
     permission_classes = [IsAuthenticated]
@@ -78,77 +120,17 @@ class UserViewSet(viewsets.ModelViewSet):
         return qs.all()
 
     def get_serializer_class(self):
-        if self.action in ['update', 'partial_update']:
-            return BasicUserSerializer
         return UserSerializer
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-        
         print("\nDébut de la mise à jour de l'utilisateur")
         print("Données reçues:", request.data)
-        
-        # Extraire les données du profil
-        service_id = request.data.get('service_id')
-        role_id = request.data.get('role_id') or request.data.get('role')
-        superieurs = request.data.get('superieurs')
-        
-        print("Service reçu:", service_id)
-        print("Role ID reçu:", role_id)
-        print("Superieurs reçu:", superieurs)
-
-        # Mettre à jour l'utilisateur de base
         serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-
-        # Mettre à jour ou créer le profil
-        if not hasattr(instance, 'profile'):
-            print("Création d'un nouveau profil")
-            UserProfile.objects.create(
-                user=instance,
-                service_id=service_id if service_id else None,
-                role=role_id if role_id else 'USER'
-            )
-        else:
-            print("Mise à jour du profil existant")
-            profile = instance.profile
-            print("Profil actuel - Role:", profile.role)
-            
-            if superieurs is not None:
-                print("Tentative de mise à jour du superieur")
-                try:
-                    superieur_obj = Superieur.objects.get(id=superieurs)
-                    print("Superieur trouvé:", superieur_obj)
-                    profile.superieur = superieur_obj
-                    print("Superieur assigné au profil")
-                except Superieur.DoesNotExist:
-                    print("Superieur non trouvé!")
-                    print("Service assigné au profil")
-                except Service.DoesNotExist:
-                    print("Service non trouvé!")
-                    return Response(
-                        {'error': f'Service with id {service} does not exist'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            
-            if service_id is not None:
-                try:
-                    from core.models import Service
-                    service_obj = Service.objects.get(pk=service_id)
-                    profile.service = service_obj
-                except Service.DoesNotExist:
-                    print(f"Service avec id {service_id} introuvable")
-            if role_id is not None:
-                profile.role = role_id
-            
-            print("Sauvegarde du profil")
-            profile.save()
-            print("Profil après sauvegarde - Service:", profile.service_id, "Role:", profile.role)
-
-        # Retourner les données complètes avec le sérialiseur principal
-        main_serializer = UserSerializer(instance)
-        print("Données renvoyées:", main_serializer.data)
+        print("Données renvoyées:", serializer.data)
+        return Response(serializer.data)
         return Response(main_serializer.data)
 
 class LoginView(APIView):
@@ -689,107 +671,77 @@ class PresenceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        # Multi-sites : vérifie la présence sur n'importe quel lieu de l'entreprise de l'utilisateur
-        from .models import LieuEntreprise
         from rest_framework.exceptions import ValidationError
-        user = self.request.user
-        entreprise = getattr(user.profile, 'entreprise', None)
-        if not entreprise:
-            raise ValidationError("Aucune entreprise associée à votre profil.")
-        lieux = LieuEntreprise.objects.filter(entreprise=entreprise)
-        if not lieux.exists():
-            raise ValidationError("Aucun lieu défini pour votre entreprise.")
-        lat = float(self.request.data.get('latitude', 0))
-        lon = float(self.request.data.get('longitude', 0))
         from math import radians, cos, sin, asin, sqrt
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 6371000
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * asin(sqrt(a))
-            return R * c
-        localisation_valide = False
-        for lieu in lieux:
-            if haversine(lat, lon, lieu.latitude, lieu.longitude) <= lieu.seuil_metres:
-                localisation_valide = True
-                break
-        if not localisation_valide:
-            raise ValidationError("Merci de vous rendre sur un site autorisé de votre entreprise pour confirmer votre présence")
+        from .models import Agent
+        user = self.request.user
         statut = 'présent'
         user_id = self.request.data.get('user_id')
         if user_id:
             try:
-                agent = User.objects.get(id=user_id)
+                agent_user = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                agent = self.request.user
+                agent_user = self.request.user
         else:
-            agent = self.request.user
-        serializer.save(agent=agent, statut=statut, localisation_valide=localisation_valide)
+            agent_user = self.request.user
+
+        # Récupérer le profil Agent
+        try:
+            agent_obj = Agent.objects.get(user=agent_user)
+        except Agent.DoesNotExist:
+            raise ValidationError('Aucun profil Agent associé à cet utilisateur.')
+
+        qr_code_data = self.request.data.get('qr_code_data')
+        latitude = self.request.data.get('latitude')
+        longitude = self.request.data.get('longitude')
+        commentaire = self.request.data.get('commentaire')
+
+        localisation_valide = False
+        commentaire_final = commentaire or ''
+
+        # Validation GPS si config présente
+        if agent_obj.latitude_centre and agent_obj.longitude_centre and agent_obj.rayon_metres:
+            try:
+                lat1 = float(latitude)
+                lon1 = float(longitude)
+                lat2 = float(agent_obj.latitude_centre)
+                lon2 = float(agent_obj.longitude_centre)
+                rayon = float(agent_obj.rayon_metres)
+
+                # Haversine
+                def haversine(lat1, lon1, lat2, lon2):
+                    R = 6371000  # m
+                    phi1 = radians(lat1)
+                    phi2 = radians(lat2)
+                    dphi = radians(lat2 - lat1)
+                    dlambda = radians(lon2 - lon1)
+                    a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2)**2
+                    c = 2*asin(sqrt(a))
+                    return R * c
+
+                distance = haversine(lat1, lon1, lat2, lon2)
+                if distance > rayon:
+                    raise ValidationError(f"Vous êtes hors de la zone autorisée ({distance:.1f} m > {rayon:.1f} m)")
+                localisation_valide = True
+            except Exception as e:
+                raise ValidationError(f"Erreur lors de la validation GPS : {str(e)}")
+        else:
+            commentaire_final += " [Avertissement : aucune configuration GPS de zone autorisée sur votre profil Agent.]"
+
+        serializer.save(
+            agent=agent_user,
+            statut=statut,
+            localisation_valide=localisation_valide,
+            qr_code_data=qr_code_data,
+            latitude=latitude,
+            longitude=longitude,
+            commentaire=commentaire_final
+        )
 
     def partial_update(self, request, *args, **kwargs):
-        # Multi-sites : vérifie la présence sur n'importe quel lieu de l'entreprise de l'utilisateur pour le départ
-        from .models import LieuEntreprise
-        from rest_framework.exceptions import ValidationError
-        user = request.user
-        entreprise = getattr(user.profile, 'entreprise', None)
-        if not entreprise:
-            raise ValidationError("Aucune entreprise associée à votre profil.")
-        lieux = LieuEntreprise.objects.filter(entreprise=entreprise)
-        if not lieux.exists():
-            raise ValidationError("Aucun lieu défini pour votre entreprise.")
-        lat = float(request.data.get('latitude', 0))
-        lon = float(request.data.get('longitude', 0))
-        from math import radians, cos, sin, asin, sqrt
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 6371000
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * asin(sqrt(a))
-            return R * c
-        localisation_valide = False
-        for lieu in lieux:
-            if haversine(lat, lon, lieu.latitude, lieu.longitude) <= lieu.seuil_metres:
-                localisation_valide = True
-                break
-        if not localisation_valide:
-            raise ValidationError("Merci de vous rendre sur un site autorisé de votre entreprise pour confirmer votre départ")
+        # Multi-sites désactivé : gestion entreprise supprimée pour le départ
         return super().partial_update(request, *args, **kwargs)
 
-        # Géofencing dynamique : coordonnées du siège depuis la base
-        from .models import LieuEntreprise
-        try:
-            siege = LieuEntreprise.objects.first()
-            if not siege:
-                raise Exception("Aucun lieu d'entreprise défini.")
-        except Exception as e:
-            raise ValidationError(str(e))
-        lat = float(self.request.data.get('latitude', 0))
-        lon = float(self.request.data.get('longitude', 0))
-        from math import radians, cos, sin, asin, sqrt
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 6371000  # Rayon Terre en mètres
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * asin(sqrt(a))
-            return R * c
-        distance = haversine(lat, lon, siege.latitude, siege.longitude)
-        if distance > siege.seuil_metres:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError("Merci de vous rendre au siège pour confirmer votre présence")
-        localisation_valide = True
-        statut = 'présent'
-        user_id = self.request.data.get('user_id')
-        if user_id:
-            try:
-                agent = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                agent = self.request.user
-        else:
-            agent = self.request.user
-        serializer.save(agent=agent, statut=statut, localisation_valide=localisation_valide)
 
 
 
@@ -798,25 +750,3 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
     serializer_class = RolePermissionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-# --- API pour retourner les lieux de l'entreprise de l'utilisateur ---
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .models import LieuEntreprise
-
-class LieuxEntrepriseView(APIView):
-    def get(self, request):
-        entreprise = getattr(request.user.profile, 'entreprise', None)
-        if not entreprise:
-            return Response([], status=200)
-        lieux = LieuEntreprise.objects.filter(entreprise=entreprise)
-        data = [
-            {
-                'id': lieu.id,
-                'nom': lieu.nom,
-                'latitude': lieu.latitude,
-                'longitude': lieu.longitude,
-                'seuil_metres': lieu.seuil_metres
-            }
-            for lieu in lieux
-        ]
-        return Response(data)
