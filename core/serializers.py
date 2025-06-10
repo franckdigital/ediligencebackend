@@ -1,7 +1,13 @@
 print("SERIALIZERS.PY CHARGÉ")
 import json
-from rest_framework import serializers
 from .models import ImputationFile
+
+from django.contrib.auth.models import User
+from rest_framework import serializers
+from django.core.exceptions import ValidationError
+from core.models import UserProfile, Service
+from core.validators import validate_password  # adapte l'import si besoin
+
 
 class ImputationFileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -289,64 +295,41 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f'[UserRegistrationSerializer] Validation data: {attrs}')
         if attrs['password'] != attrs['password2']:
-            logger.error('[UserRegistrationSerializer] Password mismatch error')
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         try:
             validate_password(attrs['password'])
         except ValidationError as e:
-            logger.error(f'[UserRegistrationSerializer] Password validation error: {e}')
             raise serializers.ValidationError({"password": list(e)})
-        logger.info('[UserRegistrationSerializer] Validation successful')
         return attrs
 
     def create(self, validated_data):
-        import logging
-        import qrcode
-        from io import BytesIO
-        from django.core.files.base import ContentFile
-        logger = logging.getLogger(__name__)
-        logger.info(f'[UserRegistrationSerializer] Creating user with data: {validated_data}')
-        try:
-            role = validated_data.pop('role')
-            service = validated_data.pop('service', None)
-            matricule = validated_data.pop('matricule', None)
-            validated_data.pop('password2')
-            logger.debug(f'[UserRegistrationSerializer] Values after pop: role={role}, service={service}, matricule={matricule}')
-            user = User.objects.create_user(**validated_data)
-            logger.info(f'[UserRegistrationSerializer] User object created: {user}')
-            profile = UserProfile.objects.create(user=user, role=role, service=service, matricule=matricule)
-            qr_content = f"{matricule or getattr(profile, 'matricule', user.username)}"
-            import qrcode
-            from PIL import Image, ImageDraw, ImageFont
-            img = qrcode.make(qr_content)
-            matricule_text = matricule or getattr(profile, 'matricule', user.username)
-            img = img.convert('RGB')
-            draw = ImageDraw.Draw(img)
-            font = None
-            try:
-                font = ImageFont.truetype("arial.ttf", 18)
-            except:
-                font = ImageFont.load_default()
-            bbox = draw.textbbox((0, 0), matricule_text, font=font)
-            text_w = bbox[2] - bbox[0]
-            text_h = bbox[3] - bbox[1]
-            new_img = Image.new('RGB', (img.width, img.height + text_h + 10), 'white')
-            new_img.paste(img, (0, 0))
-            draw = ImageDraw.Draw(new_img)
-            draw.text(((img.width - text_w) // 2, img.height + 5), matricule_text, fill='black', font=font)
-            buffer = BytesIO()
-            new_img.save(buffer, format="PNG")
-            file_name = f"qrcodes/agent_{matricule or profile.id}.png"
-            profile.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=True)
-            logger.info('[UserRegistrationSerializer] UserProfile and QR code created successfully')
-            return user
-        except Exception as e:
-            logger.error(f'[UserRegistrationSerializer] Error creating user: {str(e)}', exc_info=True)
-            raise serializers.ValidationError(str(e))
+        # On retire les champs non User
+        role = validated_data.pop('role', 'AGENT')
+        service = validated_data.pop('service', None)
+        matricule = validated_data.pop('matricule', None)
+        validated_data.pop('password2', None)
+
+        # Création de l'utilisateur
+        user = User.objects.create_user(**validated_data)
+
+        # Récupère ou crée le profil (le signal le crée à la création du user)
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        # Met à jour les champs personnalisés si fournis
+        updated = False
+        if role and profile.role != role:
+            profile.role = role
+            updated = True
+        if service and profile.service != service:
+            profile.service = service
+            updated = True
+        if matricule and profile.matricule != matricule:
+            profile.matricule = matricule
+            updated = True
+        if updated:
+            profile.save()  # Déclenche aussi la génération du QR code si besoin
+
+        return user
 
 class DirectionSerializer(serializers.ModelSerializer):
     nombre_services = serializers.SerializerMethodField()
