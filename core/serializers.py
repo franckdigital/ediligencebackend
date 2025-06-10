@@ -6,8 +6,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from core.models import UserProfile, Service
-from core.validators import validate_password  # adapte l'import si besoin
-
+from django.contrib.auth.password_validation import validate_password
 
 class ImputationFileSerializer(serializers.ModelSerializer):
     class Meta:
