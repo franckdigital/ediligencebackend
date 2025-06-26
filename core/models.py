@@ -105,20 +105,11 @@ class UserProfile(models.Model):
     )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
-    qr_secret = models.CharField(
-        max_length=64,
-        unique=True,
-        editable=False,
-        help_text="Clé secrète pour QR code signé"
-    )
-    qr_code = models.ImageField(upload_to='qrcodes/', blank=True, null=True, help_text="QR code de l'agent")
 
     def save(self, *args, **kwargs):
         if not self.created_at:
             self.created_at = timezone.now()
         self.updated_at = timezone.now()
-        if not self.qr_secret or self.qr_secret == 'changeme':
-            self.qr_secret = secrets.token_hex(32)
         super().save(*args, **kwargs)
 
     class Meta:
@@ -418,7 +409,6 @@ class Agent(models.Model):
     prenom = models.CharField(max_length=255, blank=True, null=True)
     telephone = models.CharField(max_length=30, blank=True, null=True)
     matricule = models.CharField(max_length=100, unique=True)
-    qr_code = models.TextField(blank=True, null=True)  # base64 ou URL
     poste = models.CharField(max_length=100)
     service = models.ForeignKey('Service', on_delete=models.CASCADE)
     bureau = models.CharField(max_length=100, blank=True, null=True)  # Nom ou code du site/bureau
@@ -460,7 +450,7 @@ class Presence(models.Model):
     heure_arrivee = models.TimeField(null=True, blank=True)
     heure_depart = models.TimeField(null=True, blank=True)
     statut = models.CharField(max_length=32, choices=STATUT_CHOICES)
-    qr_code_data = models.TextField(null=True, blank=True, help_text="Donnée brute du QR code scannée")
+    empreinte_hash = models.TextField(null=True, blank=True, help_text="Hash de l'empreinte digitale scannée")
     latitude = models.DecimalField(max_digits=10, decimal_places=6)
     longitude = models.DecimalField(max_digits=10, decimal_places=6)
     localisation_valide = models.BooleanField(default=False)

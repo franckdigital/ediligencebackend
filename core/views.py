@@ -25,51 +25,12 @@ from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
 from .models import *
 from .serializers import DiligenceSerializer, DirectionSerializer, ServiceSerializer, CourrierSerializer, UserSerializer, UserRegistrationSerializer, BasicUserSerializer, ImputationFileSerializer
-import qrcode
+
 import hmac
 import hashlib
 from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def userprofile_qrcode(request, user_id):
-    profile = UserProfile.objects.select_related('user').get(user__id=user_id)
-    agent = profile.user
-    matricule = getattr(agent, 'matricule', None) or getattr(agent, 'username', '')
-
-    expires = int((timezone.now() + timedelta(hours=24)).timestamp())
-    payload = f"{agent.id}:{expires}"
-    signature = hmac.new(
-        profile.qr_secret.encode(),
-        payload.encode(),
-        hashlib.sha256
-    ).hexdigest()
-    qr_data = f"{payload}:{signature}"
-
-    qr_img = qrcode.make(qr_data).convert("RGB")
-    width, height = qr_img.size
-
-    font_size = 24
-    try:
-        font = ImageFont.truetype("arial.ttf", font_size)
-    except IOError:
-        font = ImageFont.load_default()
-    text_width, text_height = font.getsize(matricule)
-    total_height = height + text_height + 10
-
-    final_img = Image.new("RGB", (width, total_height), "white")
-    final_img.paste(qr_img, (0, 0))
-
-    draw = ImageDraw.Draw(final_img)
-    text_x = (width - text_width) // 2
-    draw.text((text_x, height + 5), matricule, fill="black", font=font)
-
-    response = HttpResponse(content_type="image/png")
-    final_img.save(response, "PNG")
-    return response
-
 
 class SetFingerprintView(APIView):
     permission_classes = [IsAuthenticated]
@@ -202,6 +163,36 @@ class LoginView(APIView):
         }
         return role_mapping.get(role, role)
 
+import logging
+
+class ChangePasswordView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        logger = logging.getLogger(__name__)
+        logger.info("[ChangePassword] Reçu POST /auth/change-password/ pour user=%s", request.user)
+        user = request.user
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        logger.info("[ChangePassword] Payload: old_password=%s, new_password_length=%s", bool(old_password), len(new_password) if new_password else None)
+        if not old_password or not new_password:
+            logger.warning("[ChangePassword] Champs manquants")
+            return Response({'detail': "Champs obligatoires manquants."}, status=status.HTTP_400_BAD_REQUEST)
+        if not user.check_password(old_password):
+            logger.warning("[ChangePassword] Ancien mot de passe incorrect pour user=%s", user)
+            return Response({'detail': "Ancien mot de passe incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+        from django.contrib.auth.password_validation import validate_password
+        try:
+            validate_password(new_password, user)
+        except Exception as e:
+            logger.warning("[ChangePassword] Validation password échouée: %s", str(e))
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        logger.info("[ChangePassword] Mot de passe changé avec succès pour user=%s", user)
+        return Response({'detail': "Mot de passe changé avec succès."})
+
+
 class UserProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -227,6 +218,15 @@ class UserProfileView(APIView):
             return Response(data)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        from .serializers import UserSerializer
+        user = request.user
+        serializer = UserSerializer(user, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_role_display(self, role):
         """Retourne une version formatée du rôle pour l'affichage"""
@@ -661,9 +661,46 @@ class ImputationAccessViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 # --- Presence CRUD API ---
+
+class MaPresenceDuJourView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        try:
+            agent = Agent.objects.get(user=user)
+        except Agent.DoesNotExist:
+            return Response({'presence': False, 'depart': False})
+        today = date.today()
+        # Présence (arrivée)
+        presence = Presence.objects.filter(agent=agent, date_presence=today, statut__in=['présent', 'arrivé']).exists()
+        # Départ
+        depart = Presence.objects.filter(agent=agent, date_presence=today, statut__in=['depart', 'départ']).exists()
+        return Response({'presence': presence, 'depart': depart})
+
 from .serializers import RolePermissionSerializer, PresenceSerializer
-from .models import RolePermission, Presence
+from .models import RolePermission, Presence, Agent
 from math import radians, cos, sin, asin, sqrt
+
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+class PresenceFingerprintView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        empreinte_hash = request.data.get('empreinte_hash')
+        if not empreinte_hash:
+            return Response({'error': 'empreinte_hash requis'}, status=status.HTTP_400_BAD_REQUEST)
+        Presence.objects.create(
+            utilisateur=user,
+            methode='empreinte',
+            empreinte_hash=empreinte_hash
+        )
+        return Response({'detail': 'Présence enregistrée avec succès.'}, status=status.HTTP_201_CREATED)
 
 class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
@@ -691,7 +728,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
         except Agent.DoesNotExist:
             raise ValidationError('Aucun profil Agent associé à cet utilisateur.')
 
-        qr_code_data = self.request.data.get('qr_code_data')
+        empreinte_hash_data = self.request.data.get('empreinte_hash_data')
         latitude = self.request.data.get('latitude')
         longitude = self.request.data.get('longitude')
         commentaire = self.request.data.get('commentaire')
@@ -706,7 +743,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
                 lon1 = float(longitude)
                 lat2 = float(agent_obj.latitude_centre)
                 lon2 = float(agent_obj.longitude_centre)
-                rayon = float(agent_obj.rayon_metres)
+                rayon = 50.0  # Rayon fixe de 50 mètres
 
                 # Haversine
                 def haversine(lat1, lon1, lat2, lon2):
@@ -732,7 +769,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
             agent=agent_user,
             statut=statut,
             localisation_valide=localisation_valide,
-            qr_code_data=qr_code_data,
+            empreinte_hash_data=empreinte_hash_data,
             latitude=latitude,
             longitude=longitude,
             commentaire=commentaire_final

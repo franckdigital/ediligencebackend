@@ -1,3 +1,4 @@
+print("SERIALIZER CUSTOM JWT CHARGÉ !!!")
 print("SERIALIZERS.PY CHARGÉ")
 import json
 from .models import ImputationFile
@@ -16,6 +17,53 @@ class ImputationFileSerializer(serializers.ModelSerializer):
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
+from django.contrib.auth import authenticate, get_user_model
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token['email'] = user.email
+        token['username'] = user.username
+        return token
+
+    def validate(self, attrs):
+        username = attrs.get('username')
+        password = attrs.get('password')
+        User = get_user_model()
+        user = None
+        print(f"TOKEN DEBUG: Tentative login pour username={username}")
+        # Cherche d'abord par username
+        try:
+            user_obj = User.objects.get(username=username)
+            print(f"TOKEN DEBUG: Trouvé user par username: {user_obj}")
+            if user_obj.check_password(password):
+                user = user_obj
+                print("TOKEN DEBUG: Mot de passe OK par username")
+            else:
+                print("TOKEN DEBUG: Mauvais mot de passe par username")
+        except User.DoesNotExist:
+            print("TOKEN DEBUG: Aucun user trouvé par username")
+        # Si pas trouvé, cherche par email
+        if user is None:
+            try:
+                user_obj = User.objects.get(email__iexact=username.strip())
+                print(f"TOKEN DEBUG: Trouvé user par email: {user_obj}")
+                if user_obj.check_password(password):
+                    user = user_obj
+                    print("TOKEN DEBUG: Mot de passe OK par email")
+                else:
+                    print("TOKEN DEBUG: Mauvais mot de passe par email")
+            except User.DoesNotExist:
+                print("TOKEN DEBUG: Aucun user trouvé par email")
+        if user is None or not user.is_active:
+            print("TOKEN DEBUG: ECHEC final")
+            raise serializers.ValidationError('No active account found with the given credentials')
+        print("TOKEN DEBUG: Authentification OK")
+        data = super().validate({'username': user.username, 'password': password})
+        return data
+
 from django.core.exceptions import ValidationError
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
@@ -45,16 +93,16 @@ class TacheHistoriqueSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    qr_code_url = serializers.SerializerMethodField()
+    empreinte_hash = serializers.SerializerMethodField()
 
-    def get_qr_code_url(self, obj):
+    def get_empreinte_hash(self, obj):
         if obj.qr_code:
             return obj.qr_code.url
         return None
 
     class Meta:
         model = UserProfile
-        fields = ['role', 'service', 'qr_code_url']
+        fields = ['role', 'service', 'empreinte_hash']
 
 from .models import Service
 
@@ -66,30 +114,40 @@ class ServiceSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     service_obj = ServiceSerializer(source='profile.service', read_only=True)
-    service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), source='profile.service', allow_null=True, required=False)
-    matricule = serializers.CharField(source='profile.matricule', allow_null=True, allow_blank=True, required=False)
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.all(),
+        source='profile.service',
+        allow_null=True,
+        required=False
+    )
+    matricule = serializers.CharField(
+        source='profile.matricule',
+        allow_null=True,
+        allow_blank=True,
+        required=False
+    )
     role = serializers.CharField(source='profile.role')
     role_display = serializers.CharField(source='profile.get_role_display', read_only=True)
-    qr_code_url = serializers.SerializerMethodField()
-
-
-    role = serializers.SerializerMethodField(read_only=True)
-    role_display = serializers.SerializerMethodField(read_only=True)
-    service = serializers.PrimaryKeyRelatedField(source='profile.service', queryset=Service.objects.all(), required=False, allow_null=True)
     direction = serializers.SerializerMethodField(read_only=True)
-    matricule = serializers.CharField(source='profile.matricule', required=False, allow_blank=True, allow_null=True)
+    empreinte_hash = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    qr_code_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name',
-                 'role', 'role_display', 'service', 'service_obj', 'direction', 'matricule', 'qr_code_url', 'password']
-        read_only_fields = ['id', 'role_display', 'direction', 'qr_code_url', 'service_obj']
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'role', 'role_display', 'service', 'service_obj', 'direction',
+            'matricule', 'empreinte_hash', 'password'
+        ]
+        read_only_fields = ['id', 'role_display', 'direction', 'empreinte_hash', 'service_obj']
 
-    def get_qr_code_url(self, obj):
-        if hasattr(obj, 'profile') and obj.profile.qr_code:
-            return obj.profile.qr_code.url
+    def get_empreinte_hash(self, obj):
+        # Champ qr_code supprimé, retourne None ou la valeur voulue
+        return None
+
+    def get_direction(self, obj):
+        if hasattr(obj, 'profile') and obj.profile.service and obj.profile.service.direction:
+            return obj.profile.service.direction.id
         return None
 
     def update(self, instance, validated_data):
@@ -239,7 +297,7 @@ class PresenceSerializer(serializers.ModelSerializer):
         model = Presence
         fields = [
             'id', 'agent', 'agent_details', 'date_presence', 'heure_arrivee', 'heure_depart',
-            'statut', 'qr_code_data', 'latitude', 'longitude', 'localisation_valide',
+            'statut', 'empreinte_hash', 'latitude', 'longitude', 'localisation_valide',
             'commentaire', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide', 'statut']
