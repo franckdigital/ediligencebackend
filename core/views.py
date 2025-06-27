@@ -39,11 +39,15 @@ class SetFingerprintView(APIView):
 
     def post(self, request):
         fingerprint_hash = request.data.get('fingerprint_hash')
+        print("[DEBUG] user:", request.user, "id:", request.user.id)
         if not fingerprint_hash:
+            print("[DEBUG] Aucun hash fourni")
             return Response({'error': 'Aucun hash fourni'}, status=status.HTTP_400_BAD_REQUEST)
         profile = request.user.profile
+        print("[DEBUG] Profile AVANT:", vars(profile))
         profile.empreinte_hash = fingerprint_hash
         profile.save()
+        print("[DEBUG] Profile APRÈS:", vars(profile))
         return Response({'success': True, 'empreinte_hash': fingerprint_hash})
 
 from rest_framework.authentication import TokenAuthentication
