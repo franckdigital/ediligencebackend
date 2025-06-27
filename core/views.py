@@ -34,20 +34,23 @@ from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
 
+import logging
+logger = logging.getLogger(__name__)
+
 class SetFingerprintView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         fingerprint_hash = request.data.get('fingerprint_hash')
-        print("[DEBUG] user:", request.user, "id:", request.user.id)
+        logger.info("[DEBUG] user: %s id: %s", request.user, request.user.id)
         if not fingerprint_hash:
-            print("[DEBUG] Aucun hash fourni")
+            logger.info("[DEBUG] Aucun hash fourni")
             return Response({'error': 'Aucun hash fourni'}, status=status.HTTP_400_BAD_REQUEST)
         profile = request.user.profile
-        print("[DEBUG] Profile AVANT:", vars(profile))
+        logger.info("[DEBUG] Profile AVANT: %s", vars(profile))
         profile.empreinte_hash = fingerprint_hash
         profile.save()
-        print("[DEBUG] Profile APRÈS:", vars(profile))
+        logger.info("[DEBUG] Profile APRÈS: %s", vars(profile))
         return Response({'success': True, 'empreinte_hash': fingerprint_hash})
 
 from rest_framework.authentication import TokenAuthentication
