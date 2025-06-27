@@ -51,6 +51,9 @@ class SetFingerprintView(APIView):
         profile.empreinte_hash = fingerprint_hash
         profile.save()
         logger.info("[DEBUG] Profile APRÈS: %s", vars(profile))
+        import logging
+        logging.warning("CASCADE TEST LOG WARNING - DOIT APPARAITRE")
+        logging.error("CASCADE TEST LOG ERROR - DOIT APPARAITRE")
         return Response({'success': True, 'empreinte_hash': fingerprint_hash})
 
 from rest_framework.authentication import TokenAuthentication
