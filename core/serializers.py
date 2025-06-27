@@ -1,3 +1,9 @@
+print("SERIALIZERS.PY TOP LEVEL EXECUTED")
+import os
+import rest_framework_simplejwt.serializers
+print("SIMPLEJWT SERIALIZER PATH:", rest_framework_simplejwt.serializers.__file__)
+
+print("SERIALIZERS.PY PATH:", os.path.abspath(__file__))
 print("SERIALIZER CUSTOM JWT CHARGÉ !!!")
 print("SERIALIZERS.PY CHARGÉ")
 import json
@@ -5,6 +11,7 @@ from .models import ImputationFile
 
 from django.contrib.auth.models import User
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from django.core.exceptions import ValidationError
 from core.models import UserProfile, Service
 from django.contrib.auth.password_validation import validate_password
@@ -21,6 +28,9 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate, get_user_model
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def __init__(self, *args, **kwargs):
+        print("TOKEN DEBUG: __init__ MyTokenObtainPairSerializer")
+        super().__init__(*args, **kwargs)
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -29,35 +39,102 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        print("TOKEN DEBUG: validate() APPELÉ")
         username = attrs.get('username')
         password = attrs.get('password')
         User = get_user_model()
         user = None
-        print(f"TOKEN DEBUG: Tentative login pour username={username}")
-        # Cherche d'abord par username
+        print(f"TOKEN DEBUG: Tentative login pour username/email reçu = '{username}' (password non affiché)")
+        # 1. Recherche par username
         try:
             user_obj = User.objects.get(username=username)
-            print(f"TOKEN DEBUG: Trouvé user par username: {user_obj}")
+            print(f"TOKEN DEBUG: Trouvé user par username: {user_obj} (is_active={user_obj.is_active})")
             if user_obj.check_password(password):
                 user = user_obj
                 print("TOKEN DEBUG: Mot de passe OK par username")
             else:
                 print("TOKEN DEBUG: Mauvais mot de passe par username")
         except User.DoesNotExist:
-            print("TOKEN DEBUG: Aucun user trouvé par username")
-        # Si pas trouvé, cherche par email
+            print(f"TOKEN DEBUG: Aucun user trouvé par username='{username}'")
+        # 2. Recherche par email (forcé strip et lower)
         if user is None:
+            email_lookup = username.strip().lower()
             try:
-                user_obj = User.objects.get(email__iexact=username.strip())
-                print(f"TOKEN DEBUG: Trouvé user par email: {user_obj}")
+                user_obj = User.objects.get(email__iexact=email_lookup)
+                print(f"TOKEN DEBUG: Trouvé user par email: {user_obj} (is_active={user_obj.is_active}, email enregistré='{user_obj.email}')")
                 if user_obj.check_password(password):
                     user = user_obj
                     print("TOKEN DEBUG: Mot de passe OK par email")
                 else:
                     print("TOKEN DEBUG: Mauvais mot de passe par email")
             except User.DoesNotExist:
-                print("TOKEN DEBUG: Aucun user trouvé par email")
-        if user is None or not user.is_active:
+                print(f"TOKEN DEBUG: Aucun user trouvé par email='{email_lookup}'")
+        # 3. Recherche par téléphone (UserProfile.telephone)
+        if user is None:
+            try:
+                profile = UserProfile.objects.get(telephone=username.strip())
+                user_obj = profile.user
+                print(f"TOKEN DEBUG: Trouvé user par téléphone: {user_obj} (is_active={user_obj.is_active}, telephone enregistré='{profile.telephone}')")
+                if user_obj.check_password(password):
+                    user = user_obj
+                    print("TOKEN DEBUG: Mot de passe OK par téléphone")
+                else:
+                    print("TOKEN DEBUG: Mauvais mot de passe par téléphone")
+            except UserProfile.DoesNotExist:
+                print(f"TOKEN DEBUG: Aucun user trouvé par téléphone='{username.strip()}'")
+        if user is None:
+            print("TOKEN DEBUG: ECHEC FINAL - Aucun utilisateur trouvé par username, email ou téléphone")
+            raise AuthenticationFailed('Aucun utilisateur trouvé')
+        elif not user.is_active:
+            print(f"TOKEN DEBUG: ECHEC FINAL - Utilisateur inactif (is_active=False) pour {user}")
+            raise AuthenticationFailed('Utilisateur inactif')
+        attrs['username'] = user.username  # injecte le vrai username pour le parent
+        return super().validate(attrs)
+
+        user = None
+        print(f"TOKEN DEBUG: Tentative login pour username/email reçu = '{username}' (password non affiché)")
+        # 1. Recherche par username
+        try:
+            user_obj = User.objects.get(username=username)
+            print(f"TOKEN DEBUG: Trouvé user par username: {user_obj} (is_active={user_obj.is_active})")
+            if user_obj.check_password(password):
+                user = user_obj
+                print("TOKEN DEBUG: Mot de passe OK par username")
+            else:
+                print("TOKEN DEBUG: Mauvais mot de passe par username")
+        except User.DoesNotExist:
+            print(f"TOKEN DEBUG: Aucun user trouvé par username='{username}'")
+        # 2. Recherche par email (forcé strip et lower)
+        if user is None:
+            email_lookup = username.strip().lower()
+            try:
+                user_obj = User.objects.get(email__iexact=email_lookup)
+                print(f"TOKEN DEBUG: Trouvé user par email: {user_obj} (is_active={user_obj.is_active}, email enregistré='{user_obj.email}')")
+                if user_obj.check_password(password):
+                    user = user_obj
+                    print("TOKEN DEBUG: Mot de passe OK par email")
+                else:
+                    print("TOKEN DEBUG: Mauvais mot de passe par email")
+            except User.DoesNotExist:
+                print(f"TOKEN DEBUG: Aucun user trouvé par email='{email_lookup}'")
+        # 3. Recherche par téléphone (UserProfile.telephone)
+        if user is None:
+            try:
+                profile = UserProfile.objects.get(telephone=username.strip())
+                user_obj = profile.user
+                print(f"TOKEN DEBUG: Trouvé user par téléphone: {user_obj} (is_active={user_obj.is_active}, telephone enregistré='{profile.telephone}')")
+                if user_obj.check_password(password):
+                    user = user_obj
+                    print("TOKEN DEBUG: Mot de passe OK par téléphone")
+                else:
+                    print("TOKEN DEBUG: Mauvais mot de passe par téléphone")
+            except UserProfile.DoesNotExist:
+                print(f"TOKEN DEBUG: Aucun user trouvé par téléphone='{username.strip()}'")
+        if user is None:
+            print("TOKEN DEBUG: ECHEC FINAL - Aucun utilisateur trouvé par username ou email")
+        elif not user.is_active:
+            print(f"TOKEN DEBUG: ECHEC FINAL - Utilisateur inactif (is_active=False) pour {user}")
+        # (le reste du code ne change pas)
             print("TOKEN DEBUG: ECHEC final")
             raise serializers.ValidationError('No active account found with the given credentials')
         print("TOKEN DEBUG: Authentification OK")
@@ -78,10 +155,11 @@ class RolePermissionSerializer(serializers.ModelSerializer):
 class BasicUserSerializer(serializers.ModelSerializer):
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), required=False, allow_null=True)
     role_id = serializers.CharField(required=False, allow_null=True)
+    telephone = serializers.CharField(source='profile.telephone', read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'service', 'role_id']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'telephone', 'service', 'role_id']
         read_only_fields = ['id']
 
 class TacheHistoriqueSerializer(serializers.ModelSerializer):
@@ -94,6 +172,15 @@ class TacheHistoriqueSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     empreinte_hash = serializers.SerializerMethodField()
+    telephone = serializers.CharField(required=False, allow_blank=True)
+
+    def update(self, instance, validated_data):
+        telephone = validated_data.get('telephone', None)
+        if telephone is not None:
+            instance.telephone = telephone
+        # Mets à jour les autres champs si besoin
+        instance = super().update(instance, validated_data)
+        return instance
 
     def get_empreinte_hash(self, obj):
         if obj.qr_code:
@@ -102,7 +189,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ['role', 'service', 'empreinte_hash']
+        fields = ['role', 'service', 'empreinte_hash', 'telephone']
 
 from .models import Service
 
@@ -113,6 +200,7 @@ class ServiceSerializer(serializers.ModelSerializer):
         fields = ['id', 'nom', 'description', 'direction', 'direction_nom']
 
 class UserSerializer(serializers.ModelSerializer):
+    telephone = serializers.CharField(source='profile.telephone', required=False, allow_blank=True)
     service_obj = ServiceSerializer(source='profile.service', read_only=True)
     service = serializers.PrimaryKeyRelatedField(
         queryset=Service.objects.all(),
@@ -137,7 +225,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'role_display', 'service', 'service_obj', 'direction',
-            'matricule', 'empreinte_hash', 'password'
+            'matricule', 'empreinte_hash', 'telephone', 'password'
         ]
         read_only_fields = ['id', 'role_display', 'direction', 'empreinte_hash', 'service_obj']
 
@@ -190,6 +278,16 @@ class UserSerializer(serializers.ModelSerializer):
                 logger.info(f'[UserSerializer] Mise à jour du matricule: {profile.matricule} -> {matricule}')
                 profile.matricule = str(matricule)
                 qr_code_needs_update = True
+            # Téléphone
+            telephone = None
+            if 'telephone' in validated_data:
+                telephone = validated_data.pop('telephone')
+            elif 'profile' in validated_data and 'telephone' in validated_data['profile']:
+                telephone = validated_data['profile'].pop('telephone')
+            if telephone is not None and telephone != profile.telephone:
+                logger.info(f'[UserSerializer] Mise à jour du téléphone: {profile.telephone} -> {telephone}')
+                profile.telephone = telephone
+
             # Service
             if service is not None:
                 from .models import Service
@@ -302,49 +400,17 @@ class PresenceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide', 'statut']
 
-class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        user = self.user
-        profile = user.profile
-        
-        # Ajouter les informations de l'utilisateur dans la réponse
-        data.update({
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'role': profile.role,
-                'role_display': self.get_role_display(profile.role),
-                'service': profile.service.id if profile.service else None,
-                'direction': profile.direction.id if profile.direction else None,
-                'notifications_count': user.notifications.filter(read=False).count() if hasattr(user, 'notifications') else 0
-            }
-        })
-        return data
-
-    def get_role_display(self, role):
-        """Retourne une version formatée du rôle pour l'affichage"""
-        role_mapping = {
-            'ADMIN': 'Administrateur',
-            'superadmin': 'Super Administrateur',
-            'USER': 'Utilisateur',
-            'MANAGER': 'Manager'
-        }
-        return role_mapping.get(role, role)
-
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
     role = serializers.ChoiceField(choices=UserProfile.ROLE_CHOICES, default='AGENT')
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), required=False, allow_null=True)
     matricule = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    telephone = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 'role', 'service', 'matricule')
+        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name', 'role', 'service', 'matricule', 'telephone')
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
@@ -361,27 +427,28 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        # On retire les champs non User
+        # Retirer les champs non User
+        password = validated_data.pop('password', None)
+        password2 = validated_data.pop('password2', None)
         role = validated_data.pop('role', 'AGENT')
         service = validated_data.pop('service', None)
         matricule = validated_data.pop('matricule', None)
-        validated_data.pop('password2', None)
-
-        # Création de l'utilisateur
-        user = User.objects.create_user(**validated_data)
-
-        # Récupère ou crée le profil (le signal le crée à la création du user)
+        telephone = validated_data.pop('telephone', None)
+        user = User.objects.create(**validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        # Créer ou mettre à jour le profil utilisateur
         profile, created = UserProfile.objects.get_or_create(user=user)
-        # Met à jour les champs personnalisés si fournis
-        updated = False
-        if role and profile.role != role:
-            profile.role = role
-            updated = True
-        if service and profile.service != service:
+        profile.role = role
+        if service:
             profile.service = service
-            updated = True
-        if matricule and profile.matricule != matricule:
+        if matricule:
             profile.matricule = matricule
+        if telephone:
+            updated = True
+        if telephone and profile.telephone != telephone:
+            profile.telephone = telephone
             updated = True
         if updated:
             profile.save()  # Déclenche aussi la génération du QR code si besoin

@@ -28,6 +28,11 @@ ALLOWED_HOSTS = [
 
 # Application definition
 
+SIMPLE_JWT = {
+    "TOKEN_OBTAIN_SERIALIZER": "core.serializers.MyTokenObtainPairSerializer",
+}
+
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -102,11 +107,11 @@ WSGI_APPLICATION = 'ediligence.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'ediligence',
-        #'NAME': 'diligence',
+        #'NAME': 'ediligence',
+        'NAME': 'diligence',
         'USER': 'root',
-        'PASSWORD': 'M@nager@2025',
-        #'PASSWORD': 'root',
+        #'PASSWORD': 'M@nager@2025',
+        'PASSWORD': 'root',
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {

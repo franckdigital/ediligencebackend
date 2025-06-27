@@ -7,7 +7,7 @@ from .views import (
     AdminRegistrationView, LoginView, UserViewSet,
     DirectionViewSet, ServiceViewSet, CourrierViewSet, DiligenceViewSet,
     DiligenceDownloadFichierView, AgentRegistrationView, ImputationFileViewSet,
-    ImputationAccessViewSet, RolePermissionViewSet, PresenceViewSet
+    RolePermissionViewSet, PresenceViewSet
 )
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet
 from django.urls import path, include
@@ -21,14 +21,13 @@ router.register(r'services', ServiceViewSet)
 router.register(r'courriers', CourrierViewSet)
 router.register(r'diligences', DiligenceViewSet)
 router.register(r'imputation-files', ImputationFileViewSet)
-from .views import ImputationAccessViewSet, RolePermissionViewSet, PresenceViewSet, MaPresenceDuJourView
+from .views import RolePermissionViewSet, PresenceViewSet, MaPresenceDuJourView
 from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers import MyTokenObtainPairSerializer
+from .views import CustomTokenObtainPairView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-class MyTokenObtainPairView(TokenObtainPairView):
-    serializer_class = MyTokenObtainPairSerializer
-router.register(r'imputation-access', ImputationAccessViewSet, basename='imputation-access')
+
 router.register(r'role-permissions', RolePermissionViewSet, basename='role-permissions')
 router.register(r'presences', PresenceViewSet, basename='presences')
 
@@ -39,7 +38,8 @@ router.register(r'commentaires', CommentaireViewSet)
 router.register(r'fichiers', FichierViewSet)
 
 urlpatterns = [
-    path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/custom/', CustomTokenObtainPairView.as_view(), name='custom_token_obtain_pair'),
+    path('token/', TokenObtainPairView.as_view(serializer_class=MyTokenObtainPairSerializer), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('presence/ma-presence-du-jour/', MaPresenceDuJourView.as_view(), name='ma-presence-du-jour'),
     path('set-fingerprint/', SetFingerprintView.as_view(), name='set-fingerprint'),

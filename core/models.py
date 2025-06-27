@@ -94,6 +94,7 @@ class UserProfile(models.Model):
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     matricule = models.CharField(max_length=64, blank=True, null=True)
+    telephone = models.CharField(max_length=32, unique=True, blank=True, null=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
     service = models.ForeignKey(
         Service,

@@ -1,4 +1,6 @@
+print("VIEWS.PY TOP LEVEL EXECUTED")
 import os
+print("VIEWS.PY CHARGÉ")
 import json
 import logging
 from django.conf import settings
@@ -222,10 +224,13 @@ class UserProfileView(APIView):
     def patch(self, request):
         from .serializers import UserSerializer
         user = request.user
+        print("PATCH DEBUG: request.data =", request.data)
         serializer = UserSerializer(user, data=request.data, partial=True, context={'request': request})
+        print("PATCH DEBUG: serializer initial_data =", serializer.initial_data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
+        print("PATCH DEBUG: serializer.errors =", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_role_display(self, role):
@@ -505,29 +510,8 @@ class DiligenceViewSet(viewsets.ModelViewSet):
                 import traceback
                 print("Traceback:", traceback.format_exc())
 
-        print("\nDonnées finales avant création:", {
-            'direction': request.data.get('direction'),
-            'services_concernes_ids': request.data.get('services_concernes_ids'),
-            'courrier_id': request.data.get('courrier_id'),
-            'agents_ids': request.data.get('agents_ids')
-        })
-        
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        print("Appel explicite à serializer.save() (donc à create du serializer)")
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        print("Diligence créée avec succès:", serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        print("\nDonnées finales avant création:", {'direction': request.data.get('direction')})
 
-    def partial_update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        nouvelle_instruction = request.data.get('nouvelle_instruction')
-        if nouvelle_instruction is not None:
-            instance.instructions = nouvelle_instruction  # Remplace instructions
-            instance.save()
-        # Laisse DRF gérer les autres champs
-        return super().partial_update(request, *args, **kwargs)
 
 
 class CourrierViewSet(viewsets.ModelViewSet):
@@ -641,10 +625,36 @@ from rest_framework import viewsets, permissions
 from .models import ImputationAccess
 from .serializers import ImputationAccessSerializer
 
-class ImputationAccessViewSet(viewsets.ModelViewSet):
-    queryset = ImputationAccess.objects.all()
-    serializer_class = ImputationAccessSerializer
-    permission_classes = [permissions.IsAuthenticated]
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import MyTokenObtainPairSerializer
+
+class CustomTokenObtainPairView(APIView):
+    permission_classes = [permissions.AllowAny]
+    def post(self, request, *args, **kwargs):
+        print("CUSTOM JWT VIEW: appelée !")
+        print("CUSTOM JWT VIEW: avant instanciation serializer")
+        print("MyTokenObtainPairSerializer =", MyTokenObtainPairSerializer, "from", MyTokenObtainPairSerializer.__module__)
+        serializer = MyTokenObtainPairSerializer(data=request.data)
+        print("CUSTOM JWT VIEW: après instanciation serializer")
+        print("CUSTOM JWT VIEW: juste avant serializer.is_valid()")
+        print("CUSTOM JWT VIEW: request.data =", request.data)
+        try:
+            is_valid = serializer.is_valid()
+            print("CUSTOM JWT VIEW: juste après serializer.is_valid(), résultat:", is_valid)
+        except Exception as e:
+            print("CUSTOM JWT VIEW: EXCEPTION lors de serializer.is_valid():", repr(e))
+            import traceback; traceback.print_exc()
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if is_valid:
+            print("CUSTOM JWT VIEW: serializer OK")
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        else:
+            print("CUSTOM JWT VIEW: serializer NON valide")
+            print("CUSTOM JWT VIEW: erreurs serializer:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+
 
     def get_queryset(self):
         queryset = super().get_queryset()
