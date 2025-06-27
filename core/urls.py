@@ -4,10 +4,22 @@ from .views import (
     PresenceFingerprintView,
     UserProfileView,
     ChangePasswordView,
-    AdminRegistrationView, LoginView, UserViewSet,
-    DirectionViewSet, ServiceViewSet, CourrierViewSet, DiligenceViewSet,
-    DiligenceDownloadFichierView, AgentRegistrationView, ImputationFileViewSet,
-    RolePermissionViewSet, PresenceViewSet
+    AdminRegistrationView, 
+    LoginView, 
+    UserViewSet,
+    DirectionViewSet, 
+    ServiceViewSet, 
+    CourrierViewSet, 
+    DiligenceViewSet,
+    DiligenceDownloadFichierView, 
+    AgentRegistrationView, 
+    ImputationFileViewSet,
+    RolePermissionViewSet, 
+    PresenceViewSet,
+    ListUsersView,
+    RetrieveUserView,
+    DeleteUserView,
+    MaPresenceDuJourView
 )
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet
 from django.urls import path, include
