@@ -42,15 +42,16 @@ class SetFingerprintView(APIView):
 
     def post(self, request):
         fingerprint_hash = request.data.get('fingerprint_hash')
-        logger.info("[DEBUG] user: %s id: %s", request.user, request.user.id)
+        import logging
+        logging.warning("[DEBUG] user: %s id: %s", request.user, request.user.id)
         if not fingerprint_hash:
-            logger.info("[DEBUG] Aucun hash fourni")
+            logging.warning("[DEBUG] Aucun hash fourni")
             return Response({'error': 'Aucun hash fourni'}, status=status.HTTP_400_BAD_REQUEST)
         profile = request.user.profile
-        logger.info("[DEBUG] Profile AVANT: %s", vars(profile))
+        logging.warning("[DEBUG] Profile AVANT: %s", vars(profile))
         profile.empreinte_hash = fingerprint_hash
         profile.save()
-        logger.info("[DEBUG] Profile APRÈS: %s", vars(profile))
+        logging.warning("[DEBUG] Profile APRÈS: %s", vars(profile))
         import logging
         logging.warning("CASCADE TEST LOG WARNING - DOIT APPARAITRE")
         logging.error("CASCADE TEST LOG ERROR - DOIT APPARAITRE")
