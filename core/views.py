@@ -719,6 +719,17 @@ class RetrieveUserView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'Utilisateur non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
 
+class DeleteUserView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            user.delete()
+            return Response({'detail': 'Utilisateur supprimé.'}, status=status.HTTP_204_NO_CONTENT)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
 class MaPresenceDuJourView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
