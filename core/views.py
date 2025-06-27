@@ -720,16 +720,25 @@ class PresenceFingerprintView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
         user = request.user
+        logger.warning('[PresenceFingerprintView] Données reçues: %s', request.data)
         empreinte_hash = request.data.get('empreinte_hash')
         if not empreinte_hash:
+            logger.warning('[PresenceFingerprintView] empreinte_hash manquant')
             return Response({'error': 'empreinte_hash requis'}, status=status.HTTP_400_BAD_REQUEST)
-        Presence.objects.create(
-            utilisateur=user,
-            methode='empreinte',
-            empreinte_hash=empreinte_hash
-        )
-        return Response({'detail': 'Présence enregistrée avec succès.'}, status=status.HTTP_201_CREATED)
+        try:
+            Presence.objects.create(
+                utilisateur=user,
+                methode='empreinte',
+                empreinte_hash=empreinte_hash
+            )
+            logger.info('[PresenceFingerprintView] Présence enregistrée pour user=%s', user)
+            return Response({'detail': 'Présence enregistrée avec succès.'}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error('[PresenceFingerprintView] Erreur lors de la création de la présence: %s', str(e))
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
@@ -737,9 +746,12 @@ class PresenceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
+        import logging
+        logger = logging.getLogger(__name__)
         from rest_framework.exceptions import ValidationError
         from math import radians, cos, sin, asin, sqrt
         from .models import Agent
+        logger.warning('[PresenceViewSet] Données reçues: %s', self.request.data)
         user = self.request.user
         statut = 'présent'
         user_id = self.request.data.get('user_id')
@@ -755,6 +767,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
         try:
             agent_obj = Agent.objects.get(user=agent_user)
         except Agent.DoesNotExist:
+            logger.error('[PresenceViewSet] Aucun profil Agent associé à cet utilisateur.')
             raise ValidationError('Aucun profil Agent associé à cet utilisateur.')
 
         empreinte_hash_data = self.request.data.get('empreinte_hash_data')
@@ -786,14 +799,18 @@ class PresenceViewSet(viewsets.ModelViewSet):
                     return R * c
 
                 distance = haversine(lat1, lon1, lat2, lon2)
+                logger.warning('[PresenceViewSet] Distance calculée: %s m', distance)
                 if distance > rayon:
+                    logger.warning('[PresenceViewSet] Hors zone autorisée: %.1f m > %.1f m', distance, rayon)
                     raise ValidationError(f"Vous êtes hors de la zone autorisée ({distance:.1f} m > {rayon:.1f} m)")
                 localisation_valide = True
             except Exception as e:
+                logger.error('[PresenceViewSet] Erreur lors de la validation GPS: %s', str(e))
                 raise ValidationError(f"Erreur lors de la validation GPS : {str(e)}")
         else:
             commentaire_final += " [Avertissement : aucune configuration GPS de zone autorisée sur votre profil Agent.]"
 
+        logger.info('[PresenceViewSet] Création de la présence pour agent=%s', agent_user)
         serializer.save(
             agent=agent_user,
             statut=statut,
