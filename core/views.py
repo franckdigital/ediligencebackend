@@ -41,6 +41,7 @@ class SetFingerprintView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        raise Exception("TEST INTERRUPTION CASCADE")
         fingerprint_hash = request.data.get('fingerprint_hash')
         logger.info("[DEBUG] user: %s id: %s", request.user, request.user.id)
         if not fingerprint_hash:
