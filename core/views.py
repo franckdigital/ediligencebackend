@@ -47,7 +47,15 @@ class SetFingerprintView(APIView):
         if not fingerprint_hash:
             logging.warning("[DEBUG] Aucun hash fourni")
             return Response({'error': 'Aucun hash fourni'}, status=status.HTTP_400_BAD_REQUEST)
+        from django.db.models import Q
+        from core.models import UserProfile
         profile = request.user.profile
+        # Vérifie unicité de l'empreinte pour tous sauf l'utilisateur courant
+        if UserProfile.objects.filter(~Q(user=profile.user), empreinte_hash=fingerprint_hash).exists():
+            return Response(
+                {'error': 'Cette empreinte digitale est déjà associée à un autre utilisateur.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         logging.warning("[DEBUG] Profile AVANT: %s", vars(profile))
         profile.empreinte_hash = fingerprint_hash
         profile.save()
