@@ -93,6 +93,7 @@ class UserProfile(models.Model):
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    empreinte_hash = models.TextField(null=True, blank=True)
     matricule = models.CharField(max_length=64, blank=True, null=True)
     telephone = models.CharField(max_length=32, unique=True, blank=True, null=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
