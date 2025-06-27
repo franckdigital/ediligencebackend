@@ -691,6 +691,34 @@ class CustomTokenObtainPairView(APIView):
 
 # --- Presence CRUD API ---
 
+from rest_framework.permissions import IsAdminUser
+
+class ListUsersView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'date_joined')
+        return Response(list(users))
+
+class RetrieveUserView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            data = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_active': user.is_active,
+                'date_joined': user.date_joined,
+            }
+            return Response(data)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
 class MaPresenceDuJourView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
