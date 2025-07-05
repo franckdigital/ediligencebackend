@@ -834,7 +834,7 @@ class ObservationSerializer(serializers.ModelSerializer):
 class EtapeEvenementSerializer(serializers.ModelSerializer):
     responsable = UserSerializer(read_only=True)
 
-{{ ... }}
+    class Meta:
         model = EtapeEvenement
         fields = '__all__'
 
