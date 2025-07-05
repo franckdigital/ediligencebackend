@@ -326,11 +326,10 @@ class AdminRegistrationView(APIView):
 
             # Créer le profil avec le rôle admin
             logger.info(f"Création du profil admin pour {user.username}")
-            if not UserProfile.objects.filter(user=user).exists():
-                UserProfile.objects.create(
-                    user=user,
-                    role='ADMIN'
-                )
+            # On force le rôle ADMIN même si le profil existe déjà
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            profile.role = 'ADMIN'
+            profile.save()
 
             logger.info(f"Admin créé avec succès: {user.username}")
             return Response({
