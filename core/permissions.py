@@ -15,6 +15,7 @@ class IsProfileAdmin(BasePermission):
     Permission to allow access only to users whose UserProfile.role == 'ADMIN'.
     """
     def has_permission(self, request, view):
+        raise Exception("TEST CRASH PERMISSION")
         user = request.user
         logger.error(f"[IsProfileAdmin-ERROR] User: {user} - Authenticated: {user.is_authenticated}")
         if hasattr(user, 'profile'):
