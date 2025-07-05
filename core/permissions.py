@@ -2,9 +2,13 @@ from rest_framework.permissions import BasePermission
 
 import logging
 logger = logging.getLogger(__name__)
-fh = logging.FileHandler('/etc/home/user/ediligencebackend/ediligence_permissions.log')
-fh.setLevel(logging.INFO)
-logger.addHandler(fh)
+try:
+    fh = logging.FileHandler('/etc/home/user/ediligencebackend/ediligence_permissions.log', mode='a')
+    fh.setLevel(logging.DEBUG)
+    logger.addHandler(fh)
+    print('[IsProfileAdmin] FileHandler created in /etc/home/user/ediligencebackend/ediligence_permissions.log')
+except Exception as e:
+    print(f'[IsProfileAdmin] ERROR creating FileHandler: {e}')
 
 class IsProfileAdmin(BasePermission):
     """
