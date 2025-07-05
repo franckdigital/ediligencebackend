@@ -9,6 +9,7 @@ from .views import (
     LoginView, 
 )
 from .views_ import UserManagementViewSet, AgentViewSet
+from .views import UserViewSet
 from .views import (
     SetFingerprintView,
     BureauViewSet,
