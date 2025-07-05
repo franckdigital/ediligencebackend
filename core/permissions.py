@@ -6,4 +6,4 @@ class IsProfileAdmin(BasePermission):
     """
     def has_permission(self, request, view):
         user = request.user
-        return user.is_authenticated and hasattr(user, 'userprofile') and user.userprofile.role == 'ADMIN'
+        return user.is_authenticated and hasattr(user, 'profile') and user.profile.role == 'ADMIN'
