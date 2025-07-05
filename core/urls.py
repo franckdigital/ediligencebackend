@@ -9,6 +9,7 @@ from .views import (
     LoginView, 
 )
 from .views_ import UserManagementViewSet, AgentViewSet
+from .views_fingerprint import SetFingerprintView, VerifyFingerprintView
 from .views import UserViewSet
 from .views import (
     SetFingerprintView,
@@ -69,8 +70,8 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(serializer_class=MyTokenObtainPairSerializer), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('presence/ma-presence-du-jour/', MaPresenceDuJourView.as_view(), name='ma-presence-du-jour'),
-    path('set-fingerprint/', SetFingerprintView.as_view(), name='set-fingerprint'),
-
+    path('api/set-fingerprint/', SetFingerprintView.as_view(), name='set_fingerprint'),
+    path('api/verify-fingerprint/', VerifyFingerprintView.as_view(), name='verify_fingerprint'),
     path('presence/fingerprint/', PresenceFingerprintView.as_view(), name='presence-fingerprint'),
     path('stats/presence/', PresenceStatsAPIView.as_view(), name='presence-stats'),
     path('', include(router.urls)),
