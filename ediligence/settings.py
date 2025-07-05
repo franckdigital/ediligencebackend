@@ -143,6 +143,28 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
+# --- LOGGING pour affichage console (core & root en INFO) ---
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'core': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        '': {  # root logger
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}
+
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
