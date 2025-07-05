@@ -356,9 +356,11 @@ class CourrierDownloadView(APIView):
         response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
 
+from .permissions import IsProfileAdmin
+
 class UserManagementViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsProfileAdmin]
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -391,7 +393,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 class AgentViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsProfileAdmin]
 
     def get_queryset(self):
         user = self.request.user
