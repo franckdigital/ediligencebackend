@@ -7,15 +7,24 @@ from .views import (
     ChangePasswordView,
     AdminRegistrationView, 
     LoginView, 
-    UserViewSet,
-    DirectionViewSet, 
-    ServiceViewSet, 
-    CourrierViewSet, 
+)
+from .views_ import UserManagementViewSet, AgentViewSet
+from .views import (
+    SetFingerprintView,
+    BureauViewSet,
+    PresenceFingerprintView,
+    UserProfileView,
+    ChangePasswordView,
+    AdminRegistrationView,
+    LoginView,
+    DirectionViewSet,
+    ServiceViewSet,
+    CourrierViewSet,
     DiligenceViewSet,
-    DiligenceDownloadFichierView, 
-    AgentRegistrationView, 
+    DiligenceDownloadFichierView,
+    AgentRegistrationView,
     ImputationFileViewSet,
-    RolePermissionViewSet, 
+    RolePermissionViewSet,
     PresenceViewSet,
     ListUsersView,
     RetrieveUserView,
@@ -28,7 +37,7 @@ from rest_framework.routers import DefaultRouter
 from core.views_stats import PresenceStatsAPIView
 
 router = DefaultRouter()
-router.register(r'users', UserViewSet)
+router.register(r'users', UserManagementViewSet)
 router.register(r'directions', DirectionViewSet)
 router.register(r'services', ServiceViewSet)
 router.register(r'courriers', CourrierViewSet)
