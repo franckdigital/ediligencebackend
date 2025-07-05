@@ -31,7 +31,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import *
 from .serializers import *
-from .serializers import EvenementSerializer
+# from .serializers import EvenementSerializer
 
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
@@ -226,10 +226,10 @@ class ObservationViewSet(viewsets.ModelViewSet):
     serializer_class = ObservationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-class EvenementViewSet(viewsets.ModelViewSet):
-    queryset = Evenement.objects.all()
-    serializer_class = EvenementSerializer
-    permission_classes = [permissions.IsAuthenticated]
+# class EvenementViewSet(viewsets.ModelViewSet):
+#     queryset = Evenement.objects.all()
+#     serializer_class = EvenementSerializer
+#     permission_classes = [permissions.IsAuthenticated]
 
 class EtapeEvenementViewSet(viewsets.ModelViewSet):
     queryset = EtapeEvenement.objects.all()
