@@ -312,6 +312,8 @@ class AdminRegistrationView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Log la tentative de création d'utilisateur
+            logger.info(f"[AdminRegistrationView] Tentative de création: username={data['username']}, email={data['email']}")
             # Créer l'utilisateur
             logger.info(f"Création de l'utilisateur {data['username']}")
             user = User.objects.create_user(
@@ -324,10 +326,11 @@ class AdminRegistrationView(APIView):
 
             # Créer le profil avec le rôle admin
             logger.info(f"Création du profil admin pour {user.username}")
-            UserProfile.objects.create(
-                user=user,
-                role='ADMIN'
-            )
+            if not UserProfile.objects.filter(user=user).exists():
+                UserProfile.objects.create(
+                    user=user,
+                    role='ADMIN'
+                )
 
             logger.info(f"Admin créé avec succès: {user.username}")
             return Response({
