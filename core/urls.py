@@ -33,6 +33,7 @@ router.register(r'services', ServiceViewSet)
 router.register(r'courriers', CourrierViewSet)
 router.register(r'diligences', DiligenceViewSet)
 router.register(r'imputation-files', ImputationFileViewSet)
+router.register(r'bureaux', BureauViewSet)
 from .views import RolePermissionViewSet, PresenceViewSet, MaPresenceDuJourView
 from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers import MyTokenObtainPairSerializer

@@ -26,7 +26,8 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
 from .models import *
-from .serializers import DiligenceSerializer, DirectionSerializer, ServiceSerializer, CourrierSerializer, UserSerializer, UserRegistrationSerializer, BasicUserSerializer, ImputationFileSerializer
+from .models import Bureau
+from .serializers import DiligenceSerializer, DirectionSerializer, ServiceSerializer, CourrierSerializer, UserSerializer, UserRegistrationSerializer, BasicUserSerializer, ImputationFileSerializer, BureauSerializer
 
 import hmac
 import hashlib
@@ -644,6 +645,11 @@ from rest_framework import viewsets, permissions
 from .models import ImputationAccess
 from .serializers import ImputationAccessSerializer
 
+class BureauViewSet(viewsets.ModelViewSet):
+    queryset = Bureau.objects.all()
+    serializer_class = BureauSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -838,6 +844,9 @@ class PresenceViewSet(viewsets.ModelViewSet):
                     return R * c
 
                 distance = haversine(lat1, lon1, lat2, lon2)
+                if distance > rayon:
+                    logger.warning('[PresenceViewSet] Hors zone autorisée: %.1f m > %.1f m', distance, rayon)
+                    raise ValidationError({'error': f'Vous êtes hors de la zone autorisée pour l’enregistrement de présence ({distance:.1f} m > {rayon:.1f} m). Veuillez vous rapprocher de votre bureau.'})
                 logger.warning('[PresenceViewSet] Distance calculée: %s m', distance)
                 if distance > rayon:
                     logger.warning('[PresenceViewSet] Hors zone autorisée: %.1f m > %.1f m', distance, rayon)

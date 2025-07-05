@@ -146,6 +146,25 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from .models import *
 
+from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+class BureauSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bureau
+        fields = '__all__'
+
+    def validate(self, data):
+        # Utilise la méthode clean du modèle pour la validation avancée
+        instance = Bureau(**data)
+        if self.instance:
+            instance.pk = self.instance.pk
+        try:
+            instance.clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message)
+        return data
+
 class RolePermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RolePermission
@@ -812,17 +831,10 @@ class ObservationSerializer(serializers.ModelSerializer):
         model = Observation
         fields = '__all__'
 
-class EvenementSerializer(serializers.ModelSerializer):
-    organisateur = UserSerializer(read_only=True)
-
-    class Meta:
-        model = Evenement
-        fields = '__all__'
-
 class EtapeEvenementSerializer(serializers.ModelSerializer):
     responsable = UserSerializer(read_only=True)
 
-    class Meta:
+{{ ... }}
         model = EtapeEvenement
         fields = '__all__'
 

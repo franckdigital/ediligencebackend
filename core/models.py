@@ -93,7 +93,6 @@ class UserProfile(models.Model):
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    empreinte_hash = models.TextField(null=True, blank=True)
     matricule = models.CharField(max_length=64, blank=True, null=True)
     telephone = models.CharField(max_length=32, unique=True, blank=True, null=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
@@ -401,9 +400,29 @@ class TacheHistorique(models.Model):
     def __str__(self):
         return f"{self.tache} - {self.action} - {self.date.strftime('%Y-%m-%d %H:%M')}"
 
-
 # --- Modèle Agent (système multi-sites, QR, connexion, etc.) ---
 from django.contrib.auth.models import User
+
+from django.core.exceptions import ValidationError
+
+class Bureau(models.Model):
+    nom = models.CharField(max_length=255, unique=True, help_text="Nom ou référence du bureau")
+    latitude_centre = models.DecimalField(max_digits=9, decimal_places=6, help_text="Latitude du centre du bureau")
+    longitude_centre = models.DecimalField(max_digits=9, decimal_places=6, help_text="Longitude du centre du bureau")
+    rayon_metres = models.IntegerField(help_text="Rayon de la zone autorisée en mètres")
+
+    def clean(self):
+        # Validation avancée : coordonnées uniques
+        if Bureau.objects.exclude(pk=self.pk).filter(latitude_centre=self.latitude_centre, longitude_centre=self.longitude_centre).exists():
+            raise ValidationError("Un bureau existe déjà à ces coordonnées GPS.")
+
+    def delete(self, *args, **kwargs):
+        if self.agent_set.exists():
+            raise ValidationError("Ce bureau est encore lié à des agents et ne peut pas être supprimé.")
+        super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return self.nom
 
 class Agent(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_profile')
@@ -412,20 +431,9 @@ class Agent(models.Model):
     telephone = models.CharField(max_length=30, blank=True, null=True)
     matricule = models.CharField(max_length=100, unique=True)
     poste = models.CharField(max_length=100)
-    service = models.ForeignKey('Service', on_delete=models.CASCADE)
-    bureau = models.CharField(max_length=100, blank=True, null=True)  # Nom ou code du site/bureau
-    latitude_centre = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude_centre = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    rayon_metres = models.IntegerField(null=True, blank=True, help_text="Rayon de la zone autorisée en mètres")
-    ROLE_CHOICES = [
-        ('ADMIN', 'Admin'),
-        ('DIRECTEUR', 'Directeur'),
-        ('SUPERIEUR', 'Superieur'),
-        ('AGENT', 'Agent'),
-        ('SECRETAIRE', 'Secretaire'),
-        ('PRESTATAIRE', 'Prestataire'),
-    ]
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
+    service = models.ForeignKey('Service', on_delete=models.CASCADE, null=True, blank=True, help_text="Service de rattachement")
+    bureau = models.ForeignKey('Bureau', on_delete=models.SET_NULL, null=True, blank=True, help_text="Bureau de rattachement de l'agent")
+    empreinte_hash = models.TextField(null=True, blank=True, help_text="Hash de l'empreinte digitale de l'agent")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
 
