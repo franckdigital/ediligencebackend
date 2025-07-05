@@ -83,6 +83,7 @@ import secrets
 import secrets
 
 class UserProfile(models.Model):
+    empreinte_hash = models.CharField(max_length=255, blank=True, null=True, help_text="Hash de l'empreinte digitale de l'utilisateur")
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),
         ('DIRECTEUR', 'Directeur'),  # Peut voir toutes les diligences de sa direction
