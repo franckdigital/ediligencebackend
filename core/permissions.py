@@ -26,4 +26,13 @@ class IsProfileAdmin(BasePermission):
             print(f"[IsProfileAdmin-PRINT] Profile role: {user.profile.role}")
         else:
             print("[IsProfileAdmin-PRINT] Pas de profil lié!")
+        try:
+            with open('/etc/home/user/ediligencebackend/ediligence_debug.txt', 'a') as f:
+                f.write(f"User: {user}, Auth: {user.is_authenticated}\n")
+                if hasattr(user, 'profile'):
+                    f.write(f"Profile role: {user.profile.role}\n")
+                else:
+                    f.write("Pas de profil lié!\n")
+        except Exception as e:
+            print(f"[IsProfileAdmin] ERROR writing debug file: {e}")
         return user.is_authenticated and hasattr(user, 'profile') and user.profile.role == 'ADMIN'
