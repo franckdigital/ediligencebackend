@@ -370,6 +370,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        print("DEBUG get_queryset: user=", user, "is_authenticated=", user.is_authenticated, "profile=", getattr(user, 'profile', None), "role=", getattr(getattr(user, 'profile', None), 'role', None))
         if user.profile.role in ['ADMIN', 'superadmin']:
             return User.objects.all()
         return User.objects.none()

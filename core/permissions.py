@@ -6,5 +6,5 @@ class IsProfileAdmin(BasePermission):
     """
     def has_permission(self, request, view):
         user = request.user
-        #return user.is_authenticated and hasattr(user, 'profile') and user.profile.role == 'ADMIN'
+        print("DEBUG IsProfileAdmin: user=", user, "is_authenticated=", user.is_authenticated, "profile=", getattr(user, 'profile', None), "role=", getattr(getattr(user, 'profile', None), 'role', None))
         return True
