@@ -2,7 +2,7 @@ from rest_framework.permissions import BasePermission
 
 import logging
 logger = logging.getLogger(__name__)
-fh = logging.FileHandler('/tmp/ediligence_permissions.log')
+fh = logging.FileHandler('/etc/home/user/ediligencebackend/ediligence_permissions.log')
 fh.setLevel(logging.INFO)
 logger.addHandler(fh)
 
