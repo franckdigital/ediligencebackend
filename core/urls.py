@@ -1,6 +1,6 @@
 from rest_framework import routers
 from .views import (
-    SetFingerprintView,
+
     BureauViewSet,
     PresenceFingerprintView,
     UserProfileView,
@@ -12,7 +12,7 @@ from .views_ import UserManagementViewSet, AgentViewSet
 from .views_fingerprint import SetFingerprintView, VerifyFingerprintView
 from .views import UserViewSet
 from .views import (
-    SetFingerprintView,
+
     BureauViewSet,
     PresenceFingerprintView,
     UserProfileView,
