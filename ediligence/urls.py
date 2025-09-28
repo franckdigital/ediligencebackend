@@ -27,14 +27,63 @@ def api_home(request):
         'message': 'Bienvenue sur l\'API Ediligence',
         'version': '1.0',
         'endpoints': {
-            'api': '/api/',
+            # Administration
             'admin': '/admin/',
-            'auth': '/api/auth/',
+            'api_root': '/api/',
+            
+            # Authentification
+            'auth_login': '/api/auth/login/',
+            'auth_register': '/api/auth/register/',
+            'auth_me': '/api/auth/me/',
+            'auth_change_password': '/api/auth/change-password/',
+            'token': '/api/token/',
+            'token_refresh': '/api/token/refresh/',
+            
+            # Gestion des utilisateurs
             'users': '/api/users/',
-            'diligences': '/api/diligences/',
+            'directions': '/api/directions/',
+            'services': '/api/services/',
+            
+            # Courriers et diligences
             'courriers': '/api/courriers/',
+            'courrier_access': '/api/courrier-access/',
+            'courrier_imputation': '/api/courrier-imputation/',
+            'diligences': '/api/diligences/',
+            'enhanced_diligences': '/api/enhanced-diligences/',
+            'diligence_documents': '/api/diligence-documents/',
+            'diligence_notifications': '/api/diligence-notifications/',
+            
+            # Congés et absences
             'demandes_conge': '/api/demandes-conge/',
             'demandes_absence': '/api/demandes-absence/',
+            
+            # Projets et tâches
+            'activites': '/api/activites/',
+            'domaines': '/api/domaines/',
+            'projets': '/api/projets/',
+            'taches': '/api/taches/',
+            'commentaires': '/api/commentaires/',
+            'fichiers': '/api/fichiers/',
+            
+            # Présences et bureaux
+            'presences': '/api/presences/',
+            'bureaux': '/api/bureaux/',
+            'presence_fingerprint': '/api/presence/fingerprint/',
+            'presence_stats': '/api/stats/presence/',
+            
+            # Notifications et permissions
+            'notifications': '/api/notifications/',
+            'role_permissions': '/api/role-permissions/',
+            
+            # Imputation et accès
+            'imputation_files': '/api/imputation-files/',
+            'imputation_access': '/api/imputation-access/',
+            'user_diligence_comments': '/api/user-diligence-comments/',
+            'user_diligence_instructions': '/api/user-diligence-instructions/',
+            
+            # Empreintes digitales
+            'set_fingerprint': '/api/set-fingerprint/',
+            'verify_fingerprint': '/api/verify-fingerprint/',
         }
     })
 
