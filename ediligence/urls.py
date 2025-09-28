@@ -19,8 +19,27 @@ from django.urls import path
 from django.urls import include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import JsonResponse
+
+def api_home(request):
+    """Page d'accueil de l'API"""
+    return JsonResponse({
+        'message': 'Bienvenue sur l\'API Ediligence',
+        'version': '1.0',
+        'endpoints': {
+            'api': '/api/',
+            'admin': '/admin/',
+            'auth': '/api/auth/',
+            'users': '/api/users/',
+            'diligences': '/api/diligences/',
+            'courriers': '/api/courriers/',
+            'demandes_conge': '/api/demandes-conge/',
+            'demandes_absence': '/api/demandes-absence/',
+        }
+    })
 
 urlpatterns = [
+    path('', api_home, name='api_home'),
     path('admin/', admin.site.urls),
     path('api/', include('core.urls')),
 ]
