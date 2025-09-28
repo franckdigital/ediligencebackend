@@ -20,9 +20,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     "e-diligence.numerix.digital",
+    "api-diligence.numerix.digital",
     "localhost",
     "127.0.0.1",
-    '10.0.2.2',  # <--- ajoute cette ligne !
+    '10.0.2.2',
     # ajoute d'autres domaines si besoin
 ]
 
@@ -108,12 +109,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'diligence',
-        #'NAME': 'diligence',
-        'USER': 'root',
-        'PASSWORD': 'xamil@IFE2025',
-        #'PASSWORD': 'root',
-        'HOST': 'localhost',
-        'PORT': '3306',
+        'USER': os.environ.get('DB_USER', 'root'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'xamil@IFE2025'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '3306'),
         'OPTIONS': {
             'charset': 'utf8mb4',
             'use_unicode': True,
