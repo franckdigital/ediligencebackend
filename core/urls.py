@@ -62,7 +62,7 @@ router.register(r'notifications', NotificationViewSet, basename='notifications')
 # --- ROUTES DILIGENCES AMÉLIORÉES ---
 router.register(r'diligence-documents', DiligenceDocumentViewSet)
 router.register(r'diligence-notifications', DiligenceNotificationViewSet, basename='diligence-notifications')
-router.register(r'enhanced-diligences', EnhancedDiligenceViewSet)
+router.register(r'enhanced-diligences', EnhancedDiligenceViewSet, basename='enhanced-diligences')
 
 # --- ROUTES SUIVI PROJETS & TACHES (compatibilité) ---
 router.register(r'projets', ProjetViewSet)

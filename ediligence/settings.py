@@ -110,8 +110,8 @@ DATABASES = {
         'NAME': 'diligence',
         #'NAME': 'diligence',
         'USER': 'root',
-        #'PASSWORD': 'xamil@IFE2025',
-        'PASSWORD': 'root',
+        'PASSWORD': 'xamil@IFE2025',
+        #'PASSWORD': 'root',
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {
