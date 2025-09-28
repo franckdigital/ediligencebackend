@@ -72,8 +72,62 @@ def tache_historique(request, pk):
 
 
 from rest_framework import viewsets, permissions
-from .models import Projet, Tache, Commentaire, Fichier
-from .serializers import ProjetSerializer, TacheSerializer, CommentaireSerializer, FichierSerializer
+from .models import Projet, Tache, Commentaire, Fichier, Activite, Domaine
+from .serializers import ProjetSerializer, TacheSerializer, CommentaireSerializer, FichierSerializer, ActiviteSerializer, DomaineSerializer
+
+class ActiviteViewSet(viewsets.ModelViewSet):
+    queryset = Activite.objects.all().order_by('-created_at')
+    serializer_class = ActiviteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        
+        # Créer une notification pour l'agent responsable
+        if response.status_code == 201:
+            try:
+                from .models import DiligenceNotification
+                activite = Activite.objects.get(id=response.data['id'])
+                
+                if activite.agent_responsable:
+                    DiligenceNotification.objects.create(
+                        user=activite.agent_responsable,
+                        diligence=None,  # Pas de diligence associée
+                        type_notification='nouvelle_diligence',
+                        message=f'Nouvelle activité créée dont vous êtes responsable: {activite.type} - {activite.description[:50]}...'
+                    )
+                    print(f"Notification d'activité créée pour {activite.agent_responsable.username}")
+            except Exception as e:
+                print(f"Erreur lors de la création de la notification d'activité: {e}")
+        
+        return response
+
+class DomaineViewSet(viewsets.ModelViewSet):
+    queryset = Domaine.objects.all().order_by('-created_at')
+    serializer_class = DomaineSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        
+        # Créer une notification pour le superviseur du domaine
+        if response.status_code == 201:
+            try:
+                from .models import DiligenceNotification
+                domaine = Domaine.objects.get(id=response.data['id'])
+                
+                if domaine.superviseur:
+                    DiligenceNotification.objects.create(
+                        user=domaine.superviseur,
+                        diligence=None,  # Pas de diligence associée
+                        type_notification='nouvelle_diligence',
+                        message=f'Nouveau domaine créé dont vous êtes superviseur: {domaine.nom} (Activité: {domaine.activite.type})'
+                    )
+                    print(f"Notification de domaine créée pour {domaine.superviseur.username}")
+            except Exception as e:
+                print(f"Erreur lors de la création de la notification de domaine: {e}")
+        
+        return response
 
 class ProjetViewSet(viewsets.ModelViewSet):
     queryset = Projet.objects.all().order_by('-createdAt')
@@ -84,6 +138,29 @@ class TacheViewSet(viewsets.ModelViewSet):
     queryset = Tache.objects.all().order_by('-createdAt')
     serializer_class = TacheSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        
+        # Créer des notifications pour les agents assignés à la tâche
+        if response.status_code == 201:
+            try:
+                from .models import DiligenceNotification
+                tache = Tache.objects.get(id=response.data['id'])
+                
+                # Notifier tous les agents assignés
+                for agent in tache.agents.all():
+                    DiligenceNotification.objects.create(
+                        user=agent,
+                        diligence=None,  # Pas de diligence associée
+                        type_notification='nouvelle_diligence',
+                        message=f'Nouvelle tâche créée qui vous est assignée: {tache.titre} (Domaine: {tache.domaine.nom if tache.domaine else "N/A"})'
+                    )
+                    print(f"Notification de tâche créée pour {agent.username}")
+            except Exception as e:
+                print(f"Erreur lors de la création des notifications de tâche: {e}")
+        
+        return response
 
     def update(self, request, *args, **kwargs):
         # On récupère l'ancienne instance pour détecter les changements

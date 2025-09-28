@@ -1,36 +1,28 @@
-print("SERIALIZERS.PY TOP LEVEL EXECUTED")
-import os
-import rest_framework_simplejwt.serializers
-print("SIMPLEJWT SERIALIZER PATH:", rest_framework_simplejwt.serializers.__file__)
-
-print("SERIALIZERS.PY PATH:", os.path.abspath(__file__))
-print("SERIALIZER CUSTOM JWT CHARGÉ !!!")
-print("SERIALIZERS.PY CHARGÉ")
 import json
-from .models import ImputationFile
-
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
-from django.core.exceptions import ValidationError
-from core.models import UserProfile, Service
-from django.contrib.auth.password_validation import validate_password
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from core.models import (
+    UserProfile, Service, Direction, Courrier, CourrierAccess, CourrierImputation,
+    UserDiligenceComment, UserDiligenceInstruction, DemandeConge, 
+    DemandeAbsence, ImputationFile, DiligenceNotification, Diligence,
+    Bureau, RolePermission, TacheHistorique, Agent, Presence,
+    Notification, Observation, EtapeEvenement, Prestataire, 
+    PrestataireEtape, Evaluation, DiligenceDocument, ImputationAccess,
+    Fichier, Commentaire, Tache, Activite, Domaine, Projet
+)
 
 class ImputationFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImputationFile
         fields = '__all__'
         read_only_fields = ['created_by', 'created_at', 'updated_at']
-from django.contrib.auth.models import User
-from django.contrib.auth.password_validation import validate_password
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework import serializers
-from django.contrib.auth import authenticate, get_user_model
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
-    def __init__(self, *args, **kwargs):
-        print("TOKEN DEBUG: __init__ MyTokenObtainPairSerializer")
-        super().__init__(*args, **kwargs)
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -39,115 +31,46 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
-        print("TOKEN DEBUG: validate() APPELÉ")
         username = attrs.get('username')
         password = attrs.get('password')
         User = get_user_model()
         user = None
-        print(f"TOKEN DEBUG: Tentative login pour username/email reçu = '{username}' (password non affiché)")
+        
         # 1. Recherche par username
         try:
             user_obj = User.objects.get(username=username)
-            print(f"TOKEN DEBUG: Trouvé user par username: {user_obj} (is_active={user_obj.is_active})")
             if user_obj.check_password(password):
                 user = user_obj
-                print("TOKEN DEBUG: Mot de passe OK par username")
-            else:
-                print("TOKEN DEBUG: Mauvais mot de passe par username")
         except User.DoesNotExist:
-            print(f"TOKEN DEBUG: Aucun user trouvé par username='{username}'")
-        # 2. Recherche par email (forcé strip et lower)
+            pass
+            
+        # 2. Recherche par email
         if user is None:
             email_lookup = username.strip().lower()
             try:
                 user_obj = User.objects.get(email__iexact=email_lookup)
-                print(f"TOKEN DEBUG: Trouvé user par email: {user_obj} (is_active={user_obj.is_active}, email enregistré='{user_obj.email}')")
                 if user_obj.check_password(password):
                     user = user_obj
-                    print("TOKEN DEBUG: Mot de passe OK par email")
-                else:
-                    print("TOKEN DEBUG: Mauvais mot de passe par email")
             except User.DoesNotExist:
-                print(f"TOKEN DEBUG: Aucun user trouvé par email='{email_lookup}'")
-        # 3. Recherche par téléphone (UserProfile.telephone)
+                pass
+                
+        # 3. Recherche par téléphone
         if user is None:
             try:
                 profile = UserProfile.objects.get(telephone=username.strip())
                 user_obj = profile.user
-                print(f"TOKEN DEBUG: Trouvé user par téléphone: {user_obj} (is_active={user_obj.is_active}, telephone enregistré='{profile.telephone}')")
                 if user_obj.check_password(password):
                     user = user_obj
-                    print("TOKEN DEBUG: Mot de passe OK par téléphone")
-                else:
-                    print("TOKEN DEBUG: Mauvais mot de passe par téléphone")
             except UserProfile.DoesNotExist:
-                print(f"TOKEN DEBUG: Aucun user trouvé par téléphone='{username.strip()}'")
+                pass
+                
         if user is None:
-            print("TOKEN DEBUG: ECHEC FINAL - Aucun utilisateur trouvé par username, email ou téléphone")
             raise AuthenticationFailed('Aucun utilisateur trouvé')
         elif not user.is_active:
-            print(f"TOKEN DEBUG: ECHEC FINAL - Utilisateur inactif (is_active=False) pour {user}")
             raise AuthenticationFailed('Utilisateur inactif')
-        attrs['username'] = user.username  # injecte le vrai username pour le parent
+            
+        attrs['username'] = user.username
         return super().validate(attrs)
-
-        user = None
-        print(f"TOKEN DEBUG: Tentative login pour username/email reçu = '{username}' (password non affiché)")
-        # 1. Recherche par username
-        try:
-            user_obj = User.objects.get(username=username)
-            print(f"TOKEN DEBUG: Trouvé user par username: {user_obj} (is_active={user_obj.is_active})")
-            if user_obj.check_password(password):
-                user = user_obj
-                print("TOKEN DEBUG: Mot de passe OK par username")
-            else:
-                print("TOKEN DEBUG: Mauvais mot de passe par username")
-        except User.DoesNotExist:
-            print(f"TOKEN DEBUG: Aucun user trouvé par username='{username}'")
-        # 2. Recherche par email (forcé strip et lower)
-        if user is None:
-            email_lookup = username.strip().lower()
-            try:
-                user_obj = User.objects.get(email__iexact=email_lookup)
-                print(f"TOKEN DEBUG: Trouvé user par email: {user_obj} (is_active={user_obj.is_active}, email enregistré='{user_obj.email}')")
-                if user_obj.check_password(password):
-                    user = user_obj
-                    print("TOKEN DEBUG: Mot de passe OK par email")
-                else:
-                    print("TOKEN DEBUG: Mauvais mot de passe par email")
-            except User.DoesNotExist:
-                print(f"TOKEN DEBUG: Aucun user trouvé par email='{email_lookup}'")
-        # 3. Recherche par téléphone (UserProfile.telephone)
-        if user is None:
-            try:
-                profile = UserProfile.objects.get(telephone=username.strip())
-                user_obj = profile.user
-                print(f"TOKEN DEBUG: Trouvé user par téléphone: {user_obj} (is_active={user_obj.is_active}, telephone enregistré='{profile.telephone}')")
-                if user_obj.check_password(password):
-                    user = user_obj
-                    print("TOKEN DEBUG: Mot de passe OK par téléphone")
-                else:
-                    print("TOKEN DEBUG: Mauvais mot de passe par téléphone")
-            except UserProfile.DoesNotExist:
-                print(f"TOKEN DEBUG: Aucun user trouvé par téléphone='{username.strip()}'")
-        if user is None:
-            print("TOKEN DEBUG: ECHEC FINAL - Aucun utilisateur trouvé par username ou email")
-        elif not user.is_active:
-            print(f"TOKEN DEBUG: ECHEC FINAL - Utilisateur inactif (is_active=False) pour {user}")
-        # (le reste du code ne change pas)
-            print("TOKEN DEBUG: ECHEC final")
-            raise serializers.ValidationError('No active account found with the given credentials')
-        print("TOKEN DEBUG: Authentification OK")
-        data = super().validate({'username': user.username, 'password': password})
-        return data
-
-from django.core.exceptions import ValidationError
-from django.contrib.auth.hashers import make_password
-from django.contrib.auth.models import User
-from .models import *
-
-from rest_framework import serializers
-from django.core.exceptions import ValidationError as DjangoValidationError
 
 class BureauSerializer(serializers.ModelSerializer):
     class Meta:
@@ -210,7 +133,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = ['role', 'service', 'empreinte_hash', 'telephone']
 
-from .models import Service
+# Service déjà importé en haut
 
 class ServiceSerializer(serializers.ModelSerializer):
     direction_nom = serializers.CharField(source='direction.nom', read_only=True)
@@ -238,13 +161,14 @@ class UserSerializer(serializers.ModelSerializer):
     direction = serializers.SerializerMethodField(read_only=True)
     empreinte_hash = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    profile = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'role', 'role_display', 'service', 'service_obj', 'direction',
-            'matricule', 'empreinte_hash', 'telephone', 'password'
+            'matricule', 'empreinte_hash', 'telephone', 'password', 'profile'
         ]
         read_only_fields = ['id', 'role_display', 'direction', 'empreinte_hash', 'service_obj']
 
@@ -253,8 +177,44 @@ class UserSerializer(serializers.ModelSerializer):
         return None
 
     def get_direction(self, obj):
-        if hasattr(obj, 'profile') and obj.profile.service and obj.profile.service.direction:
-            return obj.profile.service.direction.id
+        print(f"[DEBUG] get_direction called for user {obj.id}")
+        try:
+            if hasattr(obj, 'profile') and obj.profile and obj.profile.service and obj.profile.service.direction:
+                print(f"[DEBUG] Direction found: {obj.profile.service.direction.id}")
+                return obj.profile.service.direction.id
+        except AttributeError as e:
+            print(f"[DEBUG] AttributeError in get_direction for user {obj.id}: {e}")
+        print(f"[DEBUG] No direction found for user {obj.id}")
+        return None
+    
+    def get_profile(self, obj):
+        print(f"[DEBUG] get_profile called for user {obj.id}")
+        try:
+            if hasattr(obj, 'profile') and obj.profile:
+                print(f"[DEBUG] Profile found for user {obj.id}")
+                service_data = None
+                if obj.profile.service:
+                    direction_data = None
+                    if obj.profile.service.direction:
+                        direction_data = {
+                            'id': obj.profile.service.direction.id,
+                            'nom': obj.profile.service.direction.nom
+                        }
+                    service_data = {
+                        'id': obj.profile.service.id,
+                        'nom': obj.profile.service.nom,
+                        'direction': direction_data
+                    }
+                
+                return {
+                    'role': obj.profile.role,
+                    'matricule': obj.profile.matricule,
+                    'telephone': obj.profile.telephone,
+                    'service': service_data
+                }
+        except AttributeError as e:
+            print(f"[DEBUG] AttributeError in get_profile for user {obj.id}: {e}")
+        print(f"[DEBUG] No profile found for user {obj.id}")
         return None
 
     def update(self, instance, validated_data):
@@ -309,7 +269,6 @@ class UserSerializer(serializers.ModelSerializer):
 
             # Service
             if service is not None:
-                from .models import Service
                 if isinstance(service, int):
                     try:
                         service_obj = Service.objects.get(pk=service)
@@ -403,7 +362,7 @@ class UserSerializer(serializers.ModelSerializer):
 # --- PresenceSerializer doit être défini APRÈS UserSerializer pour éviter l'import circulaire ---
 class PresenceSerializer(serializers.ModelSerializer):
     agent = serializers.PrimaryKeyRelatedField(read_only=True)
-    from .models import Agent
+    
     class AgentSerializer(serializers.ModelSerializer):
         class Meta:
             model = Agent
@@ -511,11 +470,12 @@ class CourrierSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Courrier
-        fields = ['id', 'reference', 'expediteur', 'objet', 'date_reception', 
-                 'service', 'service_details', 'categorie', 'fichier_joint', 'fichier_joint_url', 'created_at', 'updated_at']
+        fields = ['id', 'reference', 'expediteur', 'destinataire', 'objet', 'date_reception', 
+                 'service', 'service_details', 'categorie', 'type_courrier', 'sens', 'fichier_joint', 'fichier_joint_url', 'created_at', 'updated_at']
         extra_kwargs = {
             'reference': {'required': True},
             'expediteur': {'required': True},
+            'destinataire': {'required': False},
             'objet': {'required': True},
             'date_reception': {'required': True},
             'service': {'required': False},
@@ -570,11 +530,14 @@ class CourrierSerializer(serializers.ModelSerializer):
                 try:
                     service = Service.objects.get(id=service_id)
                     instance.service = service
+                    instance.save()  # IMPORTANT: Sauvegarder l'instance après avoir assigné le service
+                    print('Service successfully linked to courrier:', instance.service)
                 except Service.DoesNotExist as e:
+                    print(f'Service with id {service_id} does not exist')
                     raise serializers.ValidationError({'non_field_errors': str(e)})
             return instance
         except Exception as e:
-            print('Error creating user:', str(e))
+            print('Error creating courrier:', str(e))
             raise serializers.ValidationError(str(e))
 
     def update(self, instance, validated_data):
@@ -648,12 +611,66 @@ class AdminUserSerializer(serializers.ModelSerializer):
         )
         return user
 
-class CourrierSerializer(serializers.ModelSerializer):
+class CourrierAccessSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
+    granted_by_details = serializers.SerializerMethodField()
+    
     class Meta:
-        model = Courrier
-        fields = '__all__'
-        # Si tu veux être explicite :
-        # fields = ['id', 'reference', 'expediteur', 'objet', 'date_reception', 'service', 'categorie', 'fichier_joint', 'fichier_joint_url', 'created_at', 'updated_at']
+        model = CourrierAccess
+        fields = ['id', 'courrier', 'user', 'user_details', 'granted_by', 'granted_by_details', 'granted_at']
+    
+    def get_user_details(self, obj):
+        return {
+            'id': obj.user.id,
+            'username': obj.user.username,
+            'email': obj.user.email,
+            'first_name': obj.user.first_name,
+            'last_name': obj.user.last_name
+        }
+    
+    def get_granted_by_details(self, obj):
+        return {
+            'id': obj.granted_by.id,
+            'username': obj.granted_by.username,
+            'email': obj.granted_by.email,
+            'first_name': obj.granted_by.first_name,
+            'last_name': obj.granted_by.last_name
+        }
+
+class CourrierImputationSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
+    granted_by_details = serializers.SerializerMethodField()
+    courrier_details = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CourrierImputation
+        fields = ['id', 'courrier', 'courrier_details', 'user', 'user_details', 'access_type', 'granted_by', 'granted_by_details', 'created_at']
+    
+    def get_user_details(self, obj):
+        return {
+            'id': obj.user.id,
+            'username': obj.user.username,
+            'email': obj.user.email,
+            'first_name': obj.user.first_name,
+            'last_name': obj.user.last_name
+        }
+    
+    def get_granted_by_details(self, obj):
+        return {
+            'id': obj.granted_by.id,
+            'username': obj.granted_by.username,
+            'email': obj.granted_by.email,
+            'first_name': obj.granted_by.first_name,
+            'last_name': obj.granted_by.last_name
+        }
+    
+    def get_courrier_details(self, obj):
+        return {
+            'id': obj.courrier.id,
+            'reference': obj.courrier.reference,
+            'objet': obj.courrier.objet,
+            'type_courrier': obj.courrier.type_courrier
+        }
 
     def get_fichier_joint_url(self, obj):
         request = self.context.get('request', None)
@@ -775,11 +792,12 @@ class DiligenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Diligence
-        fields = ['id', 'reference_courrier', 'agents', 'agents_ids', 'services_concernes', 
-                 'services_concernes_ids', 'categorie', 'statut', 'fichier_joint', 
-                 'fichier_joint_url', 'instructions', 'date_limite', 'commentaires',
-                 'expediteur', 'objet', 'date_reception', 'created_at', 'updated_at',
-                 'courrier', 'courrier_id', 'direction', 'direction_details', 'nouvelle_instruction']
+        fields = ['id', 'type_diligence', 'reference_courrier', 'agents', 'agents_ids', 'services_concernes', 
+                 'services_concernes_ids', 'domaine', 'categorie', 'statut', 'pourcentage_avancement',
+                 'fichier_joint', 'fichier_joint_url', 'instructions', 'date_limite', 'date_rappel_1', 
+                 'date_rappel_2', 'commentaires', 'commentaires_agents', 'expediteur', 'objet', 'date_reception', 'created_at', 
+                 'updated_at', 'courrier', 'courrier_id', 'direction', 'direction_details', 
+                 'nouvelle_instruction', 'validated_at', 'validated_by', 'archived_at', 'archived_by']
 
     def get_fichier_joint_url(self, obj):
         if obj.fichier_joint:
@@ -796,24 +814,43 @@ class DiligenceSerializer(serializers.ModelSerializer):
 
     
     def update(self, instance, validated_data):
+        print(f"[DEBUG] DiligenceSerializer.update called with validated_data: {validated_data}")
+        
         agents_ids = validated_data.pop('agents_ids', None)
         services_ids = validated_data.pop('services_concernes_ids', None)
         courrier_id = validated_data.pop('courrier_id', None)
 
+        print(f"[DEBUG] agents_ids: {agents_ids}, services_ids: {services_ids}, courrier_id: {courrier_id}")
+
         if agents_ids is not None:
             agents_ids = self._process_list_field(agents_ids)
+            print(f"[DEBUG] Processed agents_ids: {agents_ids}")
             instance.agents.set(User.objects.filter(id__in=agents_ids))
 
         if services_ids is not None:
             services_ids = self._process_list_field(services_ids)
+            print(f"[DEBUG] Processed services_ids: {services_ids}")
             instance.services_concernes.set(Service.objects.filter(id__in=services_ids))
 
         if courrier_id is not None:
-            instance.courrier = Courrier.objects.get(id=courrier_id) if courrier_id else None
+            print(f"[DEBUG] Setting courrier_id: {courrier_id}")
+            try:
+                instance.courrier = Courrier.objects.get(id=courrier_id) if courrier_id else None
+            except Courrier.DoesNotExist:
+                print(f"[ERROR] Courrier with id {courrier_id} does not exist")
+                raise serializers.ValidationError(f"Courrier with id {courrier_id} does not exist")
 
+        print(f"[DEBUG] Remaining validated_data: {validated_data}")
         for attr, value in validated_data.items():
+            print(f"[DEBUG] Setting {attr} = {value}")
             setattr(instance, attr, value)
-        instance.save()
+        
+        try:
+            instance.save()
+            print(f"[DEBUG] Diligence {instance.id} saved successfully")
+        except Exception as e:
+            print(f"[ERROR] Failed to save diligence: {str(e)}")
+            raise
 
         return instance
 
@@ -860,10 +897,43 @@ class EvaluationSerializer(serializers.ModelSerializer):
         model = Evaluation
         fields = '__all__'
 
+# --- SERIALIZERS POUR DILIGENCES AMÉLIORÉES ---
+class DiligenceDocumentSerializer(serializers.ModelSerializer):
+    created_by_details = UserSerializer(source='created_by', read_only=True)
+    validated_by_details = UserSerializer(source='validated_by', read_only=True)
+
+    class Meta:
+        model = DiligenceDocument
+        fields = [
+            'id', 'diligence', 'titre', 'contenu', 'fichier', 'statut', 'version',
+            'created_by', 'created_by_details', 'created_at', 'updated_at',
+            'validated_by', 'validated_by_details', 'validated_at'
+        ]
+
+class DiligenceNotificationSerializer(serializers.ModelSerializer):
+    user_details = UserSerializer(source='user', read_only=True)
+    diligence_details = serializers.SerializerMethodField()
+
+    def get_diligence_details(self, obj):
+        if not obj.diligence:
+            return None
+        return {
+            'id': obj.diligence.id,
+            'reference_courrier': getattr(obj.diligence, 'reference_courrier', None),
+            'objet': getattr(obj.diligence, 'objet', None)
+        }
+
+    class Meta:
+        model = DiligenceNotification
+        fields = [
+            'id', 'user', 'user_details', 'diligence', 'diligence_details',
+            'type_notification', 'message', 'read', 'created_at'
+        ]
+
 
 # --- SERIALIZERS SUIVI
 # --- SERIALIZER POUR LES AUTORISATIONS D'IMPUTATION ---
-from .models import ImputationAccess
+# ImputationAccess déjà importé en haut
 
 class ImputationAccessSerializer(serializers.ModelSerializer):
     class Meta:
@@ -871,7 +941,7 @@ class ImputationAccessSerializer(serializers.ModelSerializer):
         fields = ['id', 'diligence', 'user', 'access_type', 'created_at']
 
 # --- SERIALIZERS SUIVI PROJETS & TACHES ---
-from .models import Projet, Tache, Commentaire, Fichier
+# Tous les modèles déjà importés en haut du fichier
 
 class FichierSerializer(serializers.ModelSerializer):
     class Meta:
@@ -888,33 +958,69 @@ def users_with_role(role):
     return User.objects.filter(profile__role=role)
 
 class TacheSerializer(serializers.ModelSerializer):
-    def get_agentsAffectes_usernames(self, obj):
-        return [u.username for u in obj.agentsAffectes.all()]
-    directeurs = serializers.PrimaryKeyRelatedField(queryset=users_with_role('DIRECTEUR'), many=True, required=False)
-    superieurs = serializers.PrimaryKeyRelatedField(queryset=users_with_role('SUPERIEUR'), many=True, required=False)
-    agents = serializers.PrimaryKeyRelatedField(queryset=users_with_role('AGENT'), many=True, required=False)
-    secretaires = serializers.PrimaryKeyRelatedField(queryset=users_with_role('SECRETAIRE'), many=True, required=False)
-    responsable_username = serializers.CharField(source='responsable.username', read_only=True)
-    agentsAffectes_usernames = serializers.SerializerMethodField()
+    responsable_details = UserSerializer(source='responsable', read_only=True)
+    agents_details = UserSerializer(source='agents', many=True, read_only=True)
+    domaine_details = serializers.SerializerMethodField()
     sous_taches = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
-    commentaires = CommentaireSerializer(many=True, read_only=True)
-    fichiers = FichierSerializer(many=True, read_only=True)
+    
+    def get_domaine_details(self, obj):
+        if obj.domaine:
+            return {
+                'id': obj.domaine.id,
+                'nom': obj.domaine.nom,
+                'superviseur': obj.domaine.superviseur.username if obj.domaine.superviseur else None
+            }
+        return None
 
     class Meta:
         model = Tache
         fields = [
-            'id', 'titre', 'description', 'etat', 'dateDebut', 'dateEcheance',
-            'priorite', 'responsable', 'responsable_username', 'agentsAffectes', 'agentsAffectes_usernames',
-            'projet', 'parentTache', 'sous_taches', 'createdAt', 'updatedAt',
-            'commentaires', 'fichiers',
-            'directeurs',
-            'superieurs',
-            'secretaires',
-            'agents'  # Ajouté pour DRF
+            'id', 'titre', 'description', 'etat', 'priorite', 
+            'responsable', 'responsable_details',
+            'agents', 'agents_details',
+            'domaine', 'domaine_details',
+            'tache_parent', 'sous_taches',
+            'date_debut', 'date_fin_prevue', 'date_fin_effective',
+            'pourcentage_avancement',
+            'createdAt', 'updatedAt',
+            # Garder pour compatibilité
+            'projet', 'directeurs', 'superieurs', 'secretaires'
         ]
 
 def users_with_role(role):
     return User.objects.filter(profile__role=role)
+
+class ActiviteSerializer(serializers.ModelSerializer):
+    responsable_principal_details = UserSerializer(source='responsable_principal', read_only=True)
+    service_details = ServiceSerializer(source='service', read_only=True)
+    domaines = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Activite
+        fields = ['id', 'nom', 'description', 'type_activite', 'service', 'service_details',
+                 'responsable_principal', 'responsable_principal_details', 'date_debut', 
+                 'date_fin_prevue', 'date_fin_effective', 'etat', 'lieu', 'budget_previsionnel',
+                 'nombre_participants_prevu', 'domaines', 'created_at', 'updated_at']
+    
+    def get_domaines(self, obj):
+        return DomaineSerializer(obj.domaines.all(), many=True).data
+
+class DomaineSerializer(serializers.ModelSerializer):
+    superviseur_details = UserSerializer(source='superviseur', read_only=True)
+    activite_details = serializers.SerializerMethodField()
+    taches = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Domaine
+        fields = ['id', 'nom', 'description', 'activite', 'activite_details', 'superviseur',
+                 'superviseur_details', 'date_debut', 'date_fin_prevue', 'date_fin_effective',
+                 'pourcentage_avancement', 'taches', 'created_at', 'updated_at']
+    
+    def get_activite_details(self, obj):
+        return {'id': obj.activite.id, 'nom': obj.activite.nom}
+    
+    def get_taches(self, obj):
+        return TacheSerializer(obj.taches.filter(tache_parent__isnull=True), many=True).data
 
 class ProjetSerializer(serializers.ModelSerializer):
     service = serializers.PrimaryKeyRelatedField(queryset=Service.objects.all(), required=False, allow_null=True)
@@ -983,3 +1089,97 @@ class ProjetSerializer(serializers.ModelSerializer):
             'directeurs', 'directeurs_ids', 'superieurs', 'superieurs_ids', 'agents', 'agents_ids', 'secretaires', 'secretaires_ids',
             'createdAt', 'updatedAt', 'taches', 'fichiers', 'service', 'direction'
         ]
+
+
+class UserDiligenceCommentSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    diligence_reference = serializers.CharField(source='diligence.reference_courrier', read_only=True)
+
+    class Meta:
+        model = UserDiligenceComment
+        fields = ['id', 'diligence', 'user', 'user_name', 'diligence_reference', 'comment', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class UserDiligenceInstructionSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    diligence_reference = serializers.CharField(source='diligence.reference_courrier', read_only=True)
+
+    class Meta:
+        model = UserDiligenceInstruction
+        fields = ['id', 'diligence', 'user', 'user_name', 'diligence_reference', 'instruction', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class DemandeCongeSerializer(serializers.ModelSerializer):
+    demandeur_name = serializers.CharField(source='demandeur.username', read_only=True)
+    demandeur_full_name = serializers.SerializerMethodField()
+    superieur_name = serializers.CharField(source='superieur_hierarchique.username', read_only=True)
+    directeur_name = serializers.SerializerMethodField()
+    superieur_selected_name = serializers.SerializerMethodField()
+    type_conge_display = serializers.CharField(source='get_type_conge_display', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    
+    class Meta:
+        model = DemandeConge
+        fields = [
+            'id', 'demandeur', 'demandeur_name', 'demandeur_full_name',
+            'matricule', 'emploi', 'fonction',
+            'type_conge', 'type_conge_display', 'date_debut', 'date_fin', 
+            'nombre_jours', 'motif', 'adresse_conge', 'telephone_conge',
+            'directeur', 'directeur_name', 'superieur', 'superieur_selected_name',
+            'superieur_hierarchique', 'superieur_name', 'statut', 'statut_display',
+            'date_validation', 'commentaire_validation', 'document_demande', 
+            'document_reponse', 'agents_concernes', 'date_creation', 'date_modification'
+        ]
+        read_only_fields = ['date_creation', 'date_modification', 'nombre_jours', 'demandeur', 'superieur_hierarchique']
+    
+    def get_demandeur_full_name(self, obj):
+        return f"{obj.demandeur.first_name} {obj.demandeur.last_name}".strip() or obj.demandeur.username
+    
+    def get_directeur_name(self, obj):
+        if obj.directeur:
+            return f"{obj.directeur.first_name} {obj.directeur.last_name}".strip() or obj.directeur.username
+        return None
+    
+    def get_superieur_selected_name(self, obj):
+        if obj.superieur:
+            return f"{obj.superieur.first_name} {obj.superieur.last_name}".strip() or obj.superieur.username
+        return None
+
+
+class DemandeAbsenceSerializer(serializers.ModelSerializer):
+    demandeur_name = serializers.CharField(source='demandeur.username', read_only=True)
+    demandeur_full_name = serializers.SerializerMethodField()
+    superieur_name = serializers.CharField(source='superieur_hierarchique.username', read_only=True)
+    directeur_name = serializers.SerializerMethodField()
+    superieur_selected_name = serializers.SerializerMethodField()
+    type_absence_display = serializers.CharField(source='get_type_absence_display', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    
+    class Meta:
+        model = DemandeAbsence
+        fields = [
+            'id', 'demandeur', 'demandeur_name', 'demandeur_full_name',
+            'matricule', 'emploi', 'fonction',
+            'type_absence', 'type_absence_display', 'date_debut', 'date_fin',
+            'duree_heures', 'motif', 
+            'directeur', 'directeur_name', 'superieur', 'superieur_selected_name',
+            'superieur_hierarchique', 'superieur_name',
+            'statut', 'statut_display', 'date_validation', 'commentaire_validation',
+            'document_demande', 'document_reponse', 'agents_concernes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'duree_heures', 'demandeur', 'superieur_hierarchique']
+    
+    def get_demandeur_full_name(self, obj):
+        return f"{obj.demandeur.first_name} {obj.demandeur.last_name}".strip() or obj.demandeur.username
+    
+    def get_directeur_name(self, obj):
+        if obj.directeur:
+            return f"{obj.directeur.first_name} {obj.directeur.last_name}".strip() or obj.directeur.username
+        return None
+    
+    def get_superieur_selected_name(self, obj):
+        if obj.superieur:
+            return f"{obj.superieur.first_name} {obj.superieur.last_name}".strip() or obj.superieur.username
+        return None

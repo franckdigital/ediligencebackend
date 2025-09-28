@@ -5,67 +5,72 @@ from .views import (
     PresenceFingerprintView,
     UserProfileView,
     ChangePasswordView,
-    AdminRegistrationView, 
-    LoginView, 
-)
-from .views_ import UserManagementViewSet, AgentViewSet
-from .views_fingerprint import SetFingerprintView, VerifyFingerprintView
-from .views import UserViewSet
-from .views import (
-
-    BureauViewSet,
-    PresenceFingerprintView,
-    UserProfileView,
-    ChangePasswordView,
     AdminRegistrationView,
-    LoginView,
-    DirectionViewSet,
-    ServiceViewSet,
-    CourrierViewSet,
-    DiligenceViewSet,
-    DiligenceDownloadFichierView,
     AgentRegistrationView,
-    ImputationFileViewSet,
-    RolePermissionViewSet,
-    PresenceViewSet,
+    LoginView,
     ListUsersView,
     RetrieveUserView,
-    DeleteUserView,
-    MaPresenceDuJourView
+    DeleteUserView
 )
-from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet
+from .views_courrier_access import CourrierAccessViewSet
+from .views_fingerprint import SetFingerprintView, VerifyFingerprintView
+from .views import UserViewSet
+from .views_ import UserManagementViewSet, NotificationViewSet
+from .views import (
+    DirectionViewSet, ServiceViewSet, DiligenceViewSet, CourrierViewSet, 
+    UserViewSet, BureauViewSet, PresenceViewSet, RolePermissionViewSet,
+    DiligenceDownloadFichierView, ImputationFileViewSet, MaPresenceDuJourView,
+    CustomTokenObtainPairView, ImputationAccessViewSet, UserDiligenceCommentViewSet,
+    UserDiligenceInstructionViewSet, DemandeCongeViewSet, DemandeAbsenceViewSet,
+    CourrierImputationViewSet
+)
+from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
+from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from core.views_stats import PresenceStatsAPIView
+from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer
 
 router = DefaultRouter()
-router.register(r'users', UserManagementViewSet)
+router.register(r'users', UserViewSet)
 router.register(r'directions', DirectionViewSet)
 router.register(r'services', ServiceViewSet)
 router.register(r'courriers', CourrierViewSet)
+router.register(r'courrier-access', CourrierAccessViewSet)
+router.register(r'courrier-imputation', CourrierImputationViewSet, basename='courrier-imputation')
 router.register(r'diligences', DiligenceViewSet)
 router.register(r'imputation-files', ImputationFileViewSet)
+router.register(r'imputation-access', ImputationAccessViewSet)
+router.register(r'user-diligence-comments', UserDiligenceCommentViewSet, basename='user-diligence-comments')
+router.register(r'user-diligence-instructions', UserDiligenceInstructionViewSet, basename='user-diligence-instructions')
+router.register(r'demandes-conge', DemandeCongeViewSet, basename='demandes-conge')
+router.register(r'demandes-absence', DemandeAbsenceViewSet, basename='demandes-absence')
 router.register(r'bureaux', BureauViewSet)
-from .views import RolePermissionViewSet, PresenceViewSet, MaPresenceDuJourView
-from rest_framework_simplejwt.views import TokenRefreshView
-from .serializers import MyTokenObtainPairSerializer
-from .views import CustomTokenObtainPairView
-from rest_framework_simplejwt.views import TokenObtainPairView
 
 
 router.register(r'role-permissions', RolePermissionViewSet, basename='role-permissions')
 router.register(r'presences', PresenceViewSet, basename='presences')
 
-# --- ROUTES SUIVI PROJETS & TACHES ---
+# --- ROUTES GESTION D'ACTIVITE ---
+router.register(r'activites', ActiviteViewSet)
+router.register(r'domaines', DomaineViewSet)
+
+# --- ROUTES NOTIFICATIONS ---
+router.register(r'notifications', NotificationViewSet, basename='notifications')
+
+# --- ROUTES DILIGENCES AMÉLIORÉES ---
+router.register(r'diligence-documents', DiligenceDocumentViewSet)
+router.register(r'diligence-notifications', DiligenceNotificationViewSet, basename='diligence-notifications')
+router.register(r'enhanced-diligences', EnhancedDiligenceViewSet)
+
+# --- ROUTES SUIVI PROJETS & TACHES (compatibilité) ---
 router.register(r'projets', ProjetViewSet)
 router.register(r'taches', TacheViewSet)
 router.register(r'commentaires', CommentaireViewSet)
 router.register(r'fichiers', FichierViewSet)
 
 urlpatterns = [
-    path('users/', ListUsersView.as_view(), name='list_users'),
-    path('users/<int:user_id>/', RetrieveUserView.as_view(), name='retrieve_user'),
-    path('users/<int:user_id>/', DeleteUserView.as_view(), name='delete_user'),
     path('token/custom/', CustomTokenObtainPairView.as_view(), name='custom_token_obtain_pair'),
     path('token/', TokenObtainPairView.as_view(serializer_class=MyTokenObtainPairSerializer), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

@@ -6,6 +6,8 @@ python-dotenv
 djangorestframework
 djangorestframework-simplejwt
 django-cors-headers
+# PDF Generation
+reportlab>=3.6.0
 # Optionnel pour l'admin amélioré
 # django-admin-interface
 # Pour les tests

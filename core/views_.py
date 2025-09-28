@@ -358,10 +358,12 @@ class CourrierDownloadView(APIView):
         return response
 
 from .permissions import IsProfileAdmin
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 class UserManagementViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
     permission_classes = [permissions.IsAuthenticated, IsProfileAdmin]
+    authentication_classes = [JWTAuthentication]
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:

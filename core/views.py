@@ -11,8 +11,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import User
 from django.db.models import Q, Count, Prefetch
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -23,15 +25,20 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import PermissionDenied
+from .pdf_utils import generate_conge_pdf, generate_absence_pdf, create_pdf_response
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
-from .models import *
-from .models import Bureau
-from .serializers import DiligenceSerializer, DirectionSerializer, ServiceSerializer, CourrierSerializer, UserSerializer, UserRegistrationSerializer, BasicUserSerializer, ImputationFileSerializer, BureauSerializer
-
-import hmac
-import hashlib
-from PIL import Image, ImageDraw, ImageFont
+from .models import Direction, Service, Diligence, Courrier, UserProfile, Bureau, Presence, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence
+from .serializers import (
+    CourrierSerializer, ServiceSerializer, DirectionSerializer, 
+    DiligenceSerializer, UserSerializer, ImputationAccessSerializer,
+    UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer,
+    ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
+    BureauSerializer, CourrierImputationSerializer
+)
+from .permissions import IsProfileAdmin
+from django.contrib.auth.models import User
+from django.shortcuts import get_object_or_404
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 class SetFingerprintView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def post(self, request):
         fingerprint_hash = request.data.get('fingerprint_hash')
@@ -66,28 +74,33 @@ class SetFingerprintView(APIView):
         logging.error("CASCADE TEST LOG ERROR - DOIT APPARAITRE")
         return Response({'success': True, 'empreinte_hash': fingerprint_hash})
 
-from rest_framework.authentication import TokenAuthentication
-
 class ImputationFileViewSet(viewsets.ModelViewSet):
     queryset = ImputationFile.objects.all()
     serializer_class = ImputationFileSerializer
     permission_classes = [permissions.IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+    authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        diligence_id = self.request.query_params.get('diligence')
+        queryset = ImputationFile.objects.all()
+        diligence_id = self.request.query_params.get('diligence_id')
         if diligence_id:
             queryset = queryset.filter(diligence_id=diligence_id)
         return queryset
+    
+    def create(self, request, *args, **kwargs):
+        print(f"[DEBUG] ImputationFile create - User: {request.user}, Data: {request.data}")
+        try:
+            response = super().create(request, *args, **kwargs)
+            print(f"[DEBUG] ImputationFile created successfully: {response.data}")
+            return response
+        except Exception as e:
+            print(f"[ERROR] ImputationFile creation failed: {str(e)}")
+            raise
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
         print('UserViewSet: requête reçue, user =', self.request.user, 'is_authenticated =', self.request.user.is_authenticated)
@@ -100,10 +113,23 @@ class UserViewSet(viewsets.ModelViewSet):
         if roles:
             role_list = [r.strip() for r in roles.split(',') if r.strip()]
             qs = qs.filter(profile__role__in=role_list)
-        return qs.all()
+        return qs.order_by('-date_joined')
 
     def get_serializer_class(self):
+        print(f"[DEBUG] UserViewSet using serializer: {UserSerializer}")
         return UserSerializer
+    
+    serializer_class = UserSerializer
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -114,7 +140,10 @@ class UserViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         print("Données renvoyées:", serializer.data)
         return Response(serializer.data)
-        return Response(main_serializer.data)
+    
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 
 class LoginView(APIView):
     authentication_classes = []  # Désactive toute auth préalable
@@ -189,6 +218,7 @@ import logging
 
 class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def post(self, request):
         logger = logging.getLogger(__name__)
@@ -217,6 +247,7 @@ class ChangePasswordView(APIView):
 
 class UserProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         user = request.user
@@ -378,9 +409,10 @@ class DirectionViewSet(viewsets.ModelViewSet):
     queryset = Direction.objects.all()
     serializer_class = DirectionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        queryset = Direction.objects.prefetch_related('services').all().order_by('nom')
+        queryset = Direction.objects.prefetch_related('services').all().order_by('-created_at')
         for direction in queryset:
             print(f'Direction {direction.nom} services:', [s.nom for s in direction.services.all()])
         return queryset
@@ -403,9 +435,10 @@ class ServiceViewSet(viewsets.ModelViewSet):
     queryset = Service.objects.select_related('direction').all()
     serializer_class = ServiceSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        return Service.objects.select_related('direction').all().order_by('direction__nom', 'nom')
+        return Service.objects.select_related('direction').all().order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save()
@@ -421,6 +454,7 @@ class DiligenceViewSet(viewsets.ModelViewSet):
     queryset = Diligence.objects.all()
     serializer_class = DiligenceSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
@@ -438,9 +472,11 @@ class DiligenceViewSet(viewsets.ModelViewSet):
         ).all().order_by('-created_at')
 
         if not profile:
+            print(f"[ERROR] No profile found for user {user.username} (ID: {user.id})")
             return Diligence.objects.none()
 
         role = profile.role
+        print(f"[DEBUG] DiligenceViewSet get_queryset - User: {user.username} (ID: {user.id}), Role: {role}")
 
         # Filtrage par statut si présent dans la requête
         statut = self.request.query_params.get('statut')
@@ -450,34 +486,106 @@ class DiligenceViewSet(viewsets.ModelViewSet):
         # Build queryset for diligences accessible by ImputationAccess
         from core.models import ImputationAccess
         imputation_access_qs = base_qs.filter(imputation_access__user=user)
+        print(f"[DEBUG] ImputationAccess diligences count: {imputation_access_qs.count()}")
 
-        # AGENT : diligences où il est dans agents
-        if role == 'AGENT':
-            qs = base_qs.filter(agents=user)
-        # SUPERIEUR ou SECRETAIRE : diligences des agents de leur service
-        elif role in ['SUPERIEUR', 'SECRETAIRE']:
-            if profile.service:
-                qs = base_qs.filter(services_concernes=profile.service)
-            else:
-                qs = Diligence.objects.none()
-        # DIRECTEUR : diligences de tous les rôles de leur direction
-        elif role == 'DIRECTEUR':
-            if profile.direction:
-                qs = base_qs.filter(direction=profile.direction)
-            else:
-                qs = Diligence.objects.none()
-        # ADMIN, superadmin, etc : tout voir
-        else:
+        # Filtrage par rôle
+        # 1. Diligences où l'utilisateur est dans les agents assignés
+        assigned_qs = base_qs.filter(agents=user)
+        print(f"[DEBUG] Assigned diligences count: {assigned_qs.count()}")
+        
+        if role == 'ADMIN':
+            # ADMIN peut voir toutes les diligences du système
             qs = base_qs
+            print(f"[DEBUG] ADMIN - Using all diligences")
+            # Combine with ImputationAccess-based queryset (union, remove duplicates)
+            final_qs = (qs | imputation_access_qs).distinct()
+        elif role == 'DIRECTEUR':
+            # DIRECTEUR peut voir toutes les diligences de sa direction ET des services rattachés
+            user_direction = profile.service.direction if profile.service else None
+            if user_direction:
+                # Diligences directement liées à la direction
+                direction_qs = base_qs.filter(
+                    models.Q(direction=user_direction) |
+                    models.Q(services_concernes__direction=user_direction) |
+                    models.Q(courrier__service__direction=user_direction)
+                ).distinct()
+                
+                # Diligences des agents de tous les services de cette direction
+                from core.models import Service
+                direction_services = Service.objects.filter(direction=user_direction)
+                direction_agents = User.objects.filter(profile__service__in=direction_services)
+                agents_direction_qs = base_qs.filter(agents__in=direction_agents).distinct()
+                
+                print(f"[DEBUG] DIRECTEUR - Direction diligences count: {direction_qs.count()}")
+                print(f"[DEBUG] DIRECTEUR - Direction agents diligences count: {agents_direction_qs.count()}")
+                
+                # Combiner les querysets sans utiliser l'union pour éviter l'erreur "unique query"
+                diligence_ids = set()
+                diligence_ids.update(assigned_qs.values_list('id', flat=True))
+                diligence_ids.update(direction_qs.values_list('id', flat=True))
+                diligence_ids.update(agents_direction_qs.values_list('id', flat=True))
+                diligence_ids.update(imputation_access_qs.values_list('id', flat=True))
+                
+                final_qs = base_qs.filter(id__in=diligence_ids)
+            else:
+                final_qs = (assigned_qs | imputation_access_qs).distinct()
+        elif role == 'SUPERIEUR':
+            # SUPERIEUR peut voir ses propres diligences ET celles de ses agents
+            user_service = profile.service if profile.service else None
+            if user_service:
+                # Diligences du service du supérieur
+                service_qs = base_qs.filter(
+                    models.Q(services_concernes=user_service) |
+                    models.Q(courrier__service=user_service)
+                ).distinct()
+                
+                # Diligences des agents du même service
+                service_agents = User.objects.filter(profile__service=user_service)
+                agents_qs = base_qs.filter(agents__in=service_agents).distinct()
+                
+                print(f"[DEBUG] SUPERIEUR - Service diligences count: {service_qs.count()}")
+                print(f"[DEBUG] SUPERIEUR - Agents diligences count: {agents_qs.count()}")
+                
+                # Combiner les querysets sans utiliser l'union pour éviter l'erreur "unique query"
+                diligence_ids = set()
+                diligence_ids.update(assigned_qs.values_list('id', flat=True))
+                diligence_ids.update(service_qs.values_list('id', flat=True))
+                diligence_ids.update(agents_qs.values_list('id', flat=True))
+                diligence_ids.update(imputation_access_qs.values_list('id', flat=True))
+                
+                final_qs = base_qs.filter(id__in=diligence_ids)
+            else:
+                final_qs = (assigned_qs | imputation_access_qs).distinct()
+        else:
+            # Autres rôles (SECRETAIRE, AGENT) ne voient que leurs diligences assignées
+            final_qs = (assigned_qs | imputation_access_qs).distinct()
+            print(f"[DEBUG] {role} - Using assigned + imputation diligences")
 
-        # Combine with ImputationAccess-based queryset (union, remove duplicates)
-        return (qs | imputation_access_qs).distinct()  # Union with .distinct() to avoid duplicates
+        print(f"[DEBUG] Final queryset count: {final_qs.count()}")
+        
+        return final_qs
 
         # Note: If you want to be more restrictive and only add ImputationAccess for non-admins, adjust logic above.
 
 
     def create(self, request, *args, **kwargs):
-        print("\nDonnées reçues pour création diligence:", request.data)
+        # Vérifier les permissions de création
+        user = request.user
+        profile = getattr(user, 'profile', None)
+        
+        if not profile:
+            return Response({'error': 'Profil utilisateur non trouvé'}, status=status.HTTP_403_FORBIDDEN)
+        
+        role = profile.role
+        allowed_roles = ['ADMIN', 'DIRECTEUR', 'SUPERIEUR', 'SECRETAIRE']
+        
+        if role not in allowed_roles:
+            return Response({
+                'error': f'Vous n\'avez pas les permissions pour créer une diligence. Rôles autorisés: {", ".join(allowed_roles)}'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        print(f"\nCréation diligence autorisée pour {user.username} (rôle: {role})")
+        print("Données reçues pour création diligence:", request.data)
         print("Type de request.data:", type(request.data))
         
         # Si un courrier est sélectionné, pré-remplir la direction et le service
@@ -533,6 +641,31 @@ class DiligenceViewSet(viewsets.ModelViewSet):
                 print("Traceback:", traceback.format_exc())
 
         print("\nDonnées finales avant création:", {'direction': request.data.get('direction')})
+        
+        # Call parent create method
+        response = super().create(request, *args, **kwargs)
+        
+        # Créer des notifications pour les agents assignés
+        if response.status_code == 201:
+            diligence_id = response.data.get('id')
+            if diligence_id:
+                try:
+                    from .models import DiligenceNotification
+                    diligence = Diligence.objects.get(id=diligence_id)
+                    
+                    # Créer une notification pour chaque agent assigné
+                    for agent in diligence.agents.all():
+                        DiligenceNotification.objects.create(
+                            user=agent,
+                            diligence=diligence,
+                            type_notification='nouvelle_diligence',
+                            message=f'Nouvelle diligence assignée: {diligence.reference_courrier}'
+                        )
+                        print(f"Notification créée pour {agent.username} - Diligence {diligence.reference_courrier}")
+                except Exception as e:
+                    print(f"Erreur lors de la création des notifications: {e}")
+        
+        return response
 
 
 
@@ -540,13 +673,45 @@ class CourrierViewSet(viewsets.ModelViewSet):
     queryset = Courrier.objects.all()
     serializer_class = CourrierSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
-        return Courrier.objects.select_related(
+        user = self.request.user
+        queryset = Courrier.objects.select_related(
             'service',
             'service__direction'
-        ).all().order_by('-date_reception')
+        ).all()
+        
+        # Filtrage selon le type de courrier et les permissions
+        if hasattr(user, 'profile'):
+            # Les ADMIN peuvent voir tous les courriers
+            if user.profile.role in ['ADMIN']:
+                return queryset.order_by('-created_at')
+            
+            # Pour les courriers confidentiels, vérifier les permissions d'accès ET les imputations
+            accessible_confidential_ids = CourrierAccess.objects.filter(
+                user=user
+            ).values_list('courrier_id', flat=True)
+            
+            # Ajouter les courriers confidentiels avec imputation
+            imputation_confidential_ids = CourrierImputation.objects.filter(
+                user=user
+            ).values_list('courrier_id', flat=True)
+            
+            # Combiner les deux listes d'IDs
+            all_accessible_ids = list(accessible_confidential_ids) + list(imputation_confidential_ids)
+            
+            # Filtrer : courriers ordinaires + courriers confidentiels avec accès ou imputation
+            queryset = queryset.filter(
+                models.Q(type_courrier='ordinaire') |
+                models.Q(type_courrier='confidentiel', id__in=all_accessible_ids)
+            )
+        else:
+            # Si pas de profil, seulement les courriers ordinaires
+            queryset = queryset.filter(type_courrier='ordinaire')
+            
+        return queryset.order_by('-created_at')
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -565,6 +730,93 @@ class CourrierViewSet(viewsets.ModelViewSet):
             }
         
         return Response(data)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def create_diligence(self, request, pk=None):
+        """Créer une diligence à partir d'un courrier"""
+        courrier = self.get_object()
+        
+        # Données pour la nouvelle diligence
+        diligence_data = {
+            'reference_courrier': courrier.reference,
+            'courrier': courrier.id,
+            'categorie': request.data.get('categorie', 'NORMAL'),
+            'expediteur': courrier.expediteur,
+            'objet': courrier.objet,
+            'date_reception': courrier.date_reception,
+            'instructions': request.data.get('instructions', ''),
+            'date_limite': request.data.get('date_limite'),
+            'agents': request.data.get('agents', []),
+            'services_concernes': request.data.get('services_concernes', []),
+            'direction': request.data.get('direction')
+        }
+        
+        from .serializers import DiligenceSerializer
+        serializer = DiligenceSerializer(data=diligence_data, context={'request': request})
+        
+        if serializer.is_valid():
+            diligence = serializer.save()
+            return Response({
+                'message': 'Diligence créée avec succès',
+                'diligence_id': diligence.id
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def imputer_courrier(self, request, pk=None):
+        """Imputer un courrier confidentiel à un utilisateur - seuls ADMIN et DIRECTEUR"""
+        user = request.user
+        
+        # Vérifier les permissions
+        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']):
+            return Response(
+                {'error': 'Seuls les administrateurs et directeurs peuvent imputer des courriers'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        courrier = self.get_object()
+        
+        # Vérifier que c'est un courrier confidentiel
+        if courrier.type_courrier != 'confidentiel':
+            return Response(
+                {'error': 'Seuls les courriers confidentiels peuvent être imputés'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user_id = request.data.get('user_id')
+        access_type = request.data.get('access_type', 'view')
+        
+        if not user_id:
+            return Response(
+                {'error': 'user_id est requis'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Utilisateur non trouvé'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Créer ou mettre à jour l'imputation
+        imputation, created = CourrierImputation.objects.get_or_create(
+            courrier=courrier,
+            user=target_user,
+            access_type=access_type,
+            defaults={'granted_by': user}
+        )
+        
+        if not created:
+            imputation.granted_by = user
+            imputation.save()
+        
+        return Response({
+            'message': f'Courrier imputé avec succès à {target_user.get_full_name() or target_user.username}',
+            'imputation_id': imputation.id
+        }, status=status.HTTP_201_CREATED)
 
     def create(self, request, *args, **kwargs):
         print('\nRequest data:', dict(request.data))
@@ -629,6 +881,9 @@ from django.http import FileResponse, Http404
 from rest_framework.views import APIView
 
 class DiligenceDownloadFichierView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
     def get(self, request, pk):
         from .models import Diligence, ImputationAccess
         try:
@@ -647,15 +902,57 @@ from rest_framework import viewsets, permissions
 from .models import ImputationAccess
 from .serializers import ImputationAccessSerializer
 
+class ImputationAccessViewSet(viewsets.ModelViewSet):
+    queryset = ImputationAccess.objects.all()
+    serializer_class = ImputationAccessSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def get_queryset(self):
+        queryset = ImputationAccess.objects.all()
+        user_id = self.request.query_params.get('user', None)
+        diligence_id = self.request.query_params.get('diligence', None)
+        
+        if user_id is not None:
+            queryset = queryset.filter(user=user_id)
+        if diligence_id is not None:
+            queryset = queryset.filter(diligence=diligence_id)
+            
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        
+        # Créer une notification pour l'utilisateur imputé
+        if response.status_code == 201:
+            try:
+                from .models import DiligenceNotification
+                imputation_access = ImputationAccess.objects.get(id=response.data['id'])
+                
+                DiligenceNotification.objects.create(
+                    user=imputation_access.user,
+                    diligence=imputation_access.diligence,
+                    type_notification='nouvelle_diligence',
+                    message=f'Vous avez été imputé sur la diligence: {imputation_access.diligence.reference_courrier}'
+                )
+                print(f"Notification d'imputation créée pour {imputation_access.user.username}")
+            except Exception as e:
+                print(f"Erreur lors de la création de la notification d'imputation: {e}")
+        
+        return response
+
 class BureauViewSet(viewsets.ModelViewSet):
     queryset = Bureau.objects.all()
     serializer_class = BureauSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .serializers import MyTokenObtainPairSerializer
+    @action(detail=True, methods=['get'])
+    def notifications(self, request, pk=None):
+        bureau = self.get_object()
+        notifications = Notification.objects.filter(bureau=bureau)
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data)
 
 class CustomTokenObtainPairView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -702,14 +999,17 @@ class CustomTokenObtainPairView(APIView):
 from rest_framework.permissions import IsAdminUser
 
 class ListUsersView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
-        users = User.objects.all().values('id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'date_joined')
-        return Response(list(users))
+        users = User.objects.select_related('profile', 'profile__service', 'profile__service__direction').all()
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
 
 class RetrieveUserView(APIView):
     permission_classes = [IsAdminUser]
+    authentication_classes = [JWTAuthentication]
 
     def get(self, request, user_id):
         try:
@@ -729,6 +1029,7 @@ class RetrieveUserView(APIView):
 
 class DeleteUserView(APIView):
     permission_classes = [IsAdminUser]
+    authentication_classes = [JWTAuthentication]
 
     def delete(self, request, user_id):
         try:
@@ -740,6 +1041,7 @@ class DeleteUserView(APIView):
 
 class MaPresenceDuJourView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         user = request.user
@@ -765,6 +1067,7 @@ from rest_framework import status
 
 class PresenceFingerprintView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def post(self, request):
         import logging
@@ -791,6 +1094,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def perform_create(self, serializer):
         import logging
@@ -882,4 +1186,604 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
     queryset = RolePermission.objects.all()
     serializer_class = RolePermissionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+
+class UserDiligenceCommentViewSet(viewsets.ModelViewSet):
+    serializer_class = UserDiligenceCommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get_queryset(self):
+        queryset = UserDiligenceComment.objects.all()
+        diligence_id = self.request.query_params.get('diligence', None)
+        user_id = self.request.query_params.get('user', None)
+        
+        if diligence_id is not None:
+            queryset = queryset.filter(diligence=diligence_id)
+        if user_id is not None:
+            queryset = queryset.filter(user=user_id)
+            
+        return queryset
+
+    def perform_create(self, serializer):
+        # Mettre à jour ou créer le commentaire
+        diligence = serializer.validated_data['diligence']
+        user = serializer.validated_data['user']
+        comment = serializer.validated_data['comment']
+        
+        obj, created = UserDiligenceComment.objects.update_or_create(
+            diligence=diligence,
+            user=user,
+            defaults={'comment': comment}
+        )
+        return obj
+
+
+class UserDiligenceInstructionViewSet(viewsets.ModelViewSet):
+    serializer_class = UserDiligenceInstructionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get_queryset(self):
+        queryset = UserDiligenceInstruction.objects.all()
+        diligence_id = self.request.query_params.get('diligence', None)
+        user_id = self.request.query_params.get('user', None)
+        
+        if diligence_id is not None:
+            queryset = queryset.filter(diligence=diligence_id)
+        if user_id is not None:
+            queryset = queryset.filter(user=user_id)
+            
+        return queryset
+
+    def perform_create(self, serializer):
+        # Mettre à jour ou créer l'instruction
+        diligence = serializer.validated_data['diligence']
+        user = serializer.validated_data['user']
+        instruction = serializer.validated_data['instruction']
+        
+        obj, created = UserDiligenceInstruction.objects.update_or_create(
+            diligence=diligence,
+            user=user,
+            defaults={'instruction': instruction}
+        )
+        return obj
+
+
+class DemandeCongeViewSet(viewsets.ModelViewSet):
+    serializer_class = DemandeCongeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def envoyer_notification(self, utilisateur, type_notification, titre, message, lien=''):
+        """
+        Envoie une notification à un utilisateur via le système de notification
+        
+        Args:
+            utilisateur: L'utilisateur destinataire
+            type_notification: Type de notification (ex: 'conges_validation', 'conges_rejet')
+            titre: Titre de la notification
+            message: Contenu détaillé de la notification
+            lien: Lien optionnel vers la ressource concernée
+        """
+        try:
+            from .models import DiligenceNotification
+            
+            # Création de la notification dans la base de données
+            notification = DiligenceNotification.objects.create(
+                user=utilisateur,
+                type_notification=type_notification,
+                message=message,
+                lien=lien
+            )
+            
+            # Ici, vous pourriez ajouter l'envoi de notification en temps réel
+            # via des WebSockets ou un autre système de messagerie
+            
+            return True
+            
+        except Exception as e:
+            print(f"Erreur lors de l'envoi de la notification à {utilisateur.username}: {str(e)}")
+            return False
+    
+    def get_queryset(self):
+        user = self.request.user
+        profile = getattr(user, 'profile', None)
+        
+        if not profile:
+            return DemandeConge.objects.none()
+        
+        # ADMIN peut voir toutes les demandes
+        if profile.role == 'ADMIN':
+            return DemandeConge.objects.all().order_by('-date_creation')
+        
+        # DIRECTEUR peut voir les demandes de toute sa direction
+        elif profile.role == 'DIRECTEUR':
+            if profile.service and profile.service.direction:
+                direction_users = User.objects.filter(
+                    profile__service__direction=profile.service.direction
+                )
+                return DemandeConge.objects.filter(
+                    models.Q(demandeur=user) | 
+                    models.Q(demandeur__in=direction_users) |
+                    models.Q(superieur_hierarchique=user)
+                ).order_by('-date_creation')
+        
+        # SUPERIEUR peut voir les demandes de son service uniquement
+        elif profile.role == 'SUPERIEUR':
+            if profile.service:
+                service_users = User.objects.filter(profile__service=profile.service)
+                return DemandeConge.objects.filter(
+                    models.Q(demandeur=user) | 
+                    models.Q(demandeur__in=service_users) |
+                    models.Q(superieur_hierarchique=user)
+                ).order_by('-date_creation')
+        
+        # SECRETAIRE peut voir les demandes de son service + ses propres demandes
+        elif profile.role == 'SECRETAIRE':
+            if profile.service:
+                service_users = User.objects.filter(profile__service=profile.service)
+                return DemandeConge.objects.filter(
+                    models.Q(demandeur=user) | 
+                    models.Q(demandeur__in=service_users) |
+                    models.Q(superieur_hierarchique=user)
+                ).order_by('-date_creation')
+        
+        # AGENT ne peut voir que ses propres demandes
+        return DemandeConge.objects.filter(demandeur=user).order_by('-date_creation')
+    
+    def perform_create(self, serializer):
+        # Déterminer le supérieur hiérarchique automatiquement
+        user = self.request.user
+        profile = getattr(user, 'profile', None)
+        superieur = None
+        
+        if profile and profile.service:
+            # Chercher un supérieur dans le même service
+            superieur_profiles = UserProfile.objects.filter(
+                service=profile.service,
+                role__in=['SUPERIEUR', 'DIRECTEUR', 'SECRETAIRE']
+            ).exclude(user=user).first()
+            
+            if superieur_profiles:
+                superieur = superieur_profiles.user
+        
+        # Sauvegarder la demande
+        demande = serializer.save(demandeur=user, superieur_hierarchique=superieur)
+        
+        # Créer une notification pour le supérieur hiérarchique
+        if superieur:
+            try:
+                from .models import DiligenceNotification
+                DiligenceNotification.objects.create(
+                    user=superieur,
+                    diligence=None,
+                    type_notification='nouvelle_diligence',
+                    message=f'{user.first_name} {user.last_name} a soumis une demande de congé {demande.get_type_conge_display()} du {demande.date_debut} au {demande.date_fin} nécessitant votre validation'
+                )
+            except Exception as e:
+                print(f"Erreur notification supérieur congé: {e}")
+        
+        # Lier automatiquement les agents de la même direction et service
+        if profile and profile.service:
+            # Récupérer tous les agents du même service
+            agents_meme_service = User.objects.filter(
+                profile__service=profile.service
+            ).exclude(id=user.id)
+            
+            # Si pas assez d'agents dans le service, inclure ceux de la même direction
+            if agents_meme_service.count() < 3 and profile.service.direction:
+                agents_meme_direction = User.objects.filter(
+                    profile__service__direction=profile.service.direction
+                ).exclude(id=user.id)
+                
+                # Combiner les agents du service et de la direction
+                agents_concernes = agents_meme_service.union(agents_meme_direction)
+            else:
+                agents_concernes = agents_meme_service
+            
+            # Ajouter les agents concernés
+            demande.agents_concernes.set(agents_concernes)
+            
+            # Créer des notifications pour les agents concernés
+            try:
+                from .models import DiligenceNotification
+                for agent in agents_concernes:
+                    DiligenceNotification.objects.create(
+                        user=agent,
+                        diligence=None,
+                        type_notification='nouvelle_diligence',
+                        message=f'{user.first_name} {user.last_name} a demandé un congé {demande.get_type_conge_display()} du {demande.date_debut} au {demande.date_fin}'
+                    )
+            except Exception as e:
+                print(f"Erreur notification agents concernés congé: {e}")
+    
+    @action(detail=True, methods=['post'])
+    def approuver(self, request, pk=None):
+        demande = self.get_object()
+        
+        # Vérifier que l'utilisateur peut approuver cette demande
+        if demande.superieur_hierarchique != request.user:
+            profile = getattr(request.user, 'profile', None)
+            if not profile or profile.role not in ['ADMIN', 'SUPERIEUR', 'DIRECTEUR']:
+                return Response({'error': 'Non autorisé'}, status=403)
+        
+        demande.statut = 'approuve'
+        demande.date_validation = timezone.now()
+        demande.commentaire_validation = request.data.get('commentaire', '')
+        demande.save()
+        
+        # Créer une notification pour le demandeur
+        try:
+            notification = Notification(
+                user=demande.demandeur,
+                type_notif='demande_approuvee',
+                contenu=f'Votre demande de congé du {demande.date_debut} au {demande.date_fin} a été approuvée',
+                lien=f'/conges/{demande.id}'
+            )
+            notification.save()
+            
+            # Envoyer une notification à l'utilisateur concerné
+            self.envoyer_notification(
+                utilisateur=demande.demandeur,
+                type_notification='conges_validation',
+                titre='Demande de congé approuvée',
+                message=f'Votre demande de congé du {demande.date_debut} au {demande.date_fin} a été approuvée par {request.user.get_full_name() or request.user.username}.',
+                lien=f'/conges/{demande.id}'
+            )
+        except Exception as e:
+            print(f"Erreur notification congé approuvé: {e}")
+        
+        return Response({'message': 'Demande approuvée'})
+    
+    @action(detail=True, methods=['post'])
+    def rejeter(self, request, pk=None):
+        demande = self.get_object()
+        
+        # Vérifier que l'utilisateur peut rejeter cette demande
+        if demande.superieur_hierarchique != request.user:
+            profile = getattr(request.user, 'profile', None)
+            if not profile or profile.role not in ['ADMIN', 'SUPERIEUR', 'DIRECTEUR']:
+                return Response({'error': 'Non autorisé'}, status=403)
+        
+        demande.statut = 'rejete'
+        demande.date_validation = timezone.now()
+        demande.commentaire_validation = request.data.get('commentaire', '')
+        demande.save()
+        
+        # Créer une notification pour le demandeur
+        try:
+            # Notification via le système existant
+            from .models import Notification
+            notification = Notification(
+                user=demande.demandeur,
+                type_notif='demande_rejetee',
+                contenu=f'Votre demande de congé {demande.type_conge} du {demande.date_debut} au {demande.date_fin} a été rejetée',
+                lien=f'/conges/{demande.id}'
+            )
+            notification.save()
+            
+            # Notification via le système de diligence
+            self.envoyer_notification(
+                utilisateur=demande.demandeur,
+                type_notification='conges_rejet',
+                titre='Demande de congé rejetée',
+                message=f'Votre demande de congé du {demande.date_debut} au {demande.date_fin} a été rejetée par {request.user.get_full_name() or request.user.username}. Motif: {request.data.get("commentaire", "Aucun motif fourni")}',
+                lien=f'/conges/{demande.id}'
+            )
+        except Exception as e:
+            print(f"Erreur notification congé rejeté: {e}")
+        
+        return Response({'message': 'Demande rejetée'})
+    
+    @action(detail=True, methods=['get'])
+    def telecharger_pdf(self, request, pk=None):
+        """Télécharge la demande de congé en PDF"""
+        demande = self.get_object()
+        
+        # Générer le PDF
+        buffer = generate_conge_pdf(demande)
+        filename = f"demande_conge_{demande.demandeur.username}_{demande.date_creation.strftime('%Y%m%d')}.pdf"
+        
+        return create_pdf_response(buffer, filename)
+
+
+class DemandeAbsenceViewSet(viewsets.ModelViewSet):
+    serializer_class = DemandeAbsenceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def envoyer_notification(self, utilisateur, type_notification, titre, message, lien=''):
+        """
+        Envoie une notification à un utilisateur via le système de notification
+        
+        Args:
+            utilisateur: L'utilisateur destinataire
+            type_notification: Type de notification (ex: 'conges_validation', 'absences_rejet')
+            titre: Titre de la notification
+            message: Contenu détaillé de la notification
+            lien: Lien optionnel vers la ressource concernée
+        """
+        try:
+            from .models import DiligenceNotification
+            
+            # Création de la notification dans la base de données
+            notification = DiligenceNotification.objects.create(
+                user=utilisateur,
+                type_notification=type_notification,
+                message=message,
+                lien=lien
+            )
+            
+            # Ici, vous pourriez ajouter l'envoi de notification en temps réel
+            # via des WebSockets ou un autre système de messagerie
+            
+            return True
+            
+        except Exception as e:
+            print(f"Erreur lors de l'envoi de la notification à {utilisateur.username}: {str(e)}")
+            return False
+    
+    def get_queryset(self):
+        user = self.request.user
+        profile = getattr(user, 'profile', None)
+        
+        if not profile:
+            return DemandeAbsence.objects.none()
+        
+        # ADMIN peut voir toutes les demandes
+        if profile.role == 'ADMIN':
+            return DemandeAbsence.objects.all().order_by('-created_at')
+        
+        # DIRECTEUR peut voir les demandes de toute sa direction
+        elif profile.role == 'DIRECTEUR':
+            if profile.service and profile.service.direction:
+                direction_users = User.objects.filter(
+                    profile__service__direction=profile.service.direction
+                )
+                return DemandeAbsence.objects.filter(
+                    models.Q(demandeur=user) | 
+                    models.Q(demandeur__in=direction_users) |
+                    models.Q(superieur_hierarchique=user)
+                ).order_by('-created_at')
+        
+        # SUPERIEUR peut voir les demandes de son service uniquement
+        elif profile.role == 'SUPERIEUR':
+            if profile.service:
+                service_users = User.objects.filter(profile__service=profile.service)
+                return DemandeAbsence.objects.filter(
+                    models.Q(demandeur=user) | 
+                    models.Q(demandeur__in=service_users) |
+                    models.Q(superieur_hierarchique=user)
+                ).order_by('-created_at')
+        
+        # SECRETAIRE peut voir les demandes de son service + ses propres demandes
+        elif profile.role == 'SECRETAIRE':
+            if profile.service:
+                service_users = User.objects.filter(profile__service=profile.service)
+                return DemandeAbsence.objects.filter(
+                    models.Q(demandeur=user) | 
+                    models.Q(demandeur__in=service_users) |
+                    models.Q(superieur_hierarchique=user)
+                ).order_by('-created_at')
+        
+        # AGENT ne peut voir que ses propres demandes
+        return DemandeAbsence.objects.filter(demandeur=user).order_by('-created_at')
+    
+    def perform_create(self, serializer):
+        # Déterminer le supérieur hiérarchique automatiquement
+        user = self.request.user
+        profile = getattr(user, 'profile', None)
+        superieur = None
+        
+        if profile and profile.service:
+            # Chercher un supérieur dans le même service
+            superieur_profiles = UserProfile.objects.filter(
+                service=profile.service,
+                role__in=['SUPERIEUR', 'DIRECTEUR', 'SECRETAIRE']
+            ).exclude(user=user).first()
+            
+            if superieur_profiles:
+                superieur = superieur_profiles.user
+        
+        # Sauvegarder la demande
+        demande = serializer.save(demandeur=user, superieur_hierarchique=superieur)
+        
+        # Créer une notification pour le supérieur hiérarchique
+        if superieur:
+            try:
+                from .models import DiligenceNotification
+                DiligenceNotification.objects.create(
+                    user=superieur,
+                    diligence=None,
+                    type_notification='nouvelle_diligence',
+                    message=f'{user.first_name} {user.last_name} a soumis une demande d\'absence {demande.get_type_absence_display()} du {demande.date_debut} au {demande.date_fin} nécessitant votre validation'
+                )
+            except Exception as e:
+                print(f"Erreur notification supérieur absence: {e}")
+        
+        # Lier automatiquement les agents de la même direction et service
+        if profile and profile.service:
+            # Récupérer tous les agents du même service
+            agents_meme_service = User.objects.filter(
+                profile__service=profile.service
+            ).exclude(id=user.id)
+            
+            # Si pas assez d'agents dans le service, inclure ceux de la même direction
+            if agents_meme_service.count() < 3 and profile.service.direction:
+                agents_meme_direction = User.objects.filter(
+                    profile__service__direction=profile.service.direction
+                ).exclude(id=user.id)
+                
+                # Combiner les agents du service et de la direction
+                agents_concernes = agents_meme_service.union(agents_meme_direction)
+            else:
+                agents_concernes = agents_meme_service
+            
+            # Ajouter les agents concernés
+            demande.agents_concernes.set(agents_concernes)
+            
+            # Créer des notifications pour les agents concernés
+            try:
+                from .models import DiligenceNotification
+                for agent in agents_concernes:
+                    DiligenceNotification.objects.create(
+                        user=agent,
+                        diligence=None,
+                        type_notification='nouvelle_diligence',
+                        message=f'{user.first_name} {user.last_name} a demandé une absence {demande.get_type_absence_display()} du {demande.date_debut} au {demande.date_fin}'
+                    )
+            except Exception as e:
+                print(f"Erreur notification agents concernés absence: {e}")
+    
+    @action(detail=True, methods=['post'])
+    def approuver(self, request, pk=None):
+        demande = self.get_object()
+        
+        # Vérifier que l'utilisateur peut approuver cette demande
+        if demande.superieur_hierarchique != request.user:
+            profile = getattr(request.user, 'profile', None)
+            if not profile or profile.role not in ['ADMIN', 'SUPERIEUR', 'DIRECTEUR']:
+                return Response({'error': 'Non autorisé'}, status=403)
+        
+        demande.statut = 'approuve'
+        demande.date_validation = timezone.now()
+        demande.commentaire_validation = request.data.get('commentaire', '')
+        demande.save()
+        
+        # Créer une notification pour le demandeur
+        try:
+            # Notification via le système existant
+            from .models import Notification
+            notification = Notification(
+                user=demande.demandeur,
+                type_notif='demande_approuvee',
+                contenu=f'Votre demande d\'absence {demande.type_absence} du {demande.date_debut.strftime("%d/%m/%Y %H:%M")} a été approuvée',
+                message=f'Votre demande d\'absence {demande.type_absence} du {demande.date_debut.strftime("%d/%m/%Y %H:%M")} a été approuvée par {request.user.get_full_name() or request.user.username}.',
+                lien=f'/absences/{demande.id}'
+            )
+            notification.save()
+            print(f"Notification standard créée avec succès pour {demande.demandeur.username}")
+            
+            # Notification via le système de diligence
+            if hasattr(self, 'envoyer_notification'):
+                success = self.envoyer_notification(
+                    utilisateur=demande.demandeur,
+                    type_notification='absences_validation',
+                    titre='Demande d\'absence approuvée',
+                    message=f'Votre demande d\'absence du {demande.date_debut.strftime("%d/%m/%Y %H:%M")} a été approuvée par {request.user.get_full_name() or request.user.username}.',
+                    lien=f'/absences/{demande.id}'
+                )
+                print(f"Notification de diligence envoyée avec succès: {success}")
+            else:
+                print("Méthode envoyer_notification non trouvée dans la vue")
+        except Exception as e:
+            print(f"Erreur lors de la création des notifications: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+        return Response({'message': 'Demande approuvée'})
+    
+    @action(detail=True, methods=['post'])
+    def rejeter(self, request, pk=None):
+        demande = self.get_object()
+        
+        # Vérifier que l'utilisateur peut rejeter cette demande
+        if demande.superieur_hierarchique != request.user:
+            profile = getattr(request.user, 'profile', None)
+            if not profile or profile.role not in ['ADMIN', 'SUPERIEUR', 'DIRECTEUR']:
+                return Response({'error': 'Non autorisé'}, status=403)
+        
+        demande.statut = 'rejete'
+        demande.date_validation = timezone.now()
+        demande.commentaire_validation = request.data.get('commentaire', '')
+        demande.save()
+        
+        # Créer une notification pour le demandeur
+        try:
+            # Notification via le système existant
+            from .models import Notification
+            notification = Notification(
+                user=demande.demandeur,
+                type_notif='demande_rejetee',
+                contenu=f'Votre demande d\'absence {demande.type_absence} du {demande.date_debut.strftime("%d/%m/%Y %H:%M")} a été rejetée',
+                lien=f'/absences/{demande.id}'
+            )
+            notification.save()
+            
+            # Notification via le système de diligence
+            self.envoyer_notification(
+                utilisateur=demande.demandeur,
+                type_notification='absences_rejet',
+                titre='Demande d\'absence rejetée',
+                message=f'Votre demande d\'absence du {demande.date_debut.strftime("%d/%m/%Y %H:%M")} a été rejetée par {request.user.get_full_name() or request.user.username}. Motif: {request.data.get("commentaire", "Aucun motif fourni")}',
+                lien=f'/absences/{demande.id}'
+            )
+        except Exception as e:
+            print(f"Erreur notification absence rejetée: {e}")
+        
+        return Response({'message': 'Demande rejetée'})
+    
+    @action(detail=True, methods=['get'])
+    def telecharger_pdf(self, request, pk=None):
+        """Télécharge la demande d'absence en PDF"""
+        demande = self.get_object()
+        
+        # Générer le PDF
+        buffer = generate_absence_pdf(demande)
+        filename = f"demande_absence_{demande.demandeur.username}_{demande.created_at.strftime('%Y%m%d')}.pdf"
+        
+        return create_pdf_response(buffer, filename)
+
+
+class CourrierImputationViewSet(viewsets.ModelViewSet):
+    """ViewSet pour gérer les imputations des courriers confidentiels"""
+    serializer_class = CourrierImputationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get_queryset(self):
+        user = self.request.user
+        
+        # Seuls les ADMIN et DIRECTEUR peuvent voir les imputations
+        if hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']:
+            return CourrierImputation.objects.select_related('courrier', 'user', 'granted_by').all()
+        
+        # Les autres utilisateurs ne voient que leurs propres imputations
+        return CourrierImputation.objects.filter(user=user).select_related('courrier', 'user', 'granted_by')
+
+    def create(self, request, *args, **kwargs):
+        """Créer une imputation - seuls ADMIN et DIRECTEUR peuvent le faire"""
+        user = request.user
+        
+        # Vérifier les permissions
+        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']):
+            return Response(
+                {'error': 'Seuls les administrateurs et directeurs peuvent créer des imputations'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Ajouter l'utilisateur qui accorde l'imputation
+        data = request.data.copy()
+        data['granted_by'] = user.id
+        
+        serializer = self.get_serializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        """Supprimer une imputation - seuls ADMIN et DIRECTEUR peuvent le faire"""
+        user = request.user
+        
+        # Vérifier les permissions
+        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']):
+            return Response(
+                {'error': 'Seuls les administrateurs et directeurs peuvent supprimer des imputations'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        return super().destroy(request, *args, **kwargs)
 

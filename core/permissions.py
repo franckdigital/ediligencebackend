@@ -6,5 +6,16 @@ class IsProfileAdmin(BasePermission):
     """
     def has_permission(self, request, view):
         user = request.user
-        print("DEBUG IsProfileAdmin: user=", user, "is_authenticated=", user.is_authenticated, "profile=", getattr(user, 'profile', None), "role=", getattr(getattr(user, 'profile', None), 'role', None))
-        return True
+        if not user.is_authenticated:
+            return False
+        
+        profile = getattr(user, 'profile', None)
+        if not profile:
+            return False
+            
+        role = getattr(profile, 'role', None)
+        print("DEBUG IsProfileAdmin: user=", user, "role=", role)
+        
+        # Permettre l'accès aux ADMIN, SUPERIEUR et DIRECTEUR
+        allowed_roles = ['ADMIN', 'SUPERIEUR', 'DIRECTEUR']
+        return role in allowed_roles
