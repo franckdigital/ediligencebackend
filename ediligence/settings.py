@@ -27,6 +27,11 @@ ALLOWED_HOSTS = [
     # ajoute d'autres domaines si besoin
 ]
 
+# Configuration HTTPS
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = False  # Nginx gère la redirection
+USE_TLS = True
+
 # Application definition
 
 SIMPLE_JWT = {
