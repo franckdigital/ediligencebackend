@@ -12,6 +12,36 @@ import base64
 from django.conf import settings
 
 
+def _armoirie_image(max_width_cm=3.0, max_height_cm=3.0):
+    """Retourne un objet Image reportlab de l'armoirie à partir d'un base64.
+    La chaîne base64 doit être fournie via settings.ARMOIRIE_BASE64 ou la variable d'environnement ARMOIRIE_BASE64.
+    Supporte un data URL (data:image/...;base64,XXXXX) ou un base64 pur.
+    """
+    b64 = getattr(settings, 'ARMOIRIE_BASE64', None) or os.environ.get('ARMOIRIE_BASE64')
+    if not b64:
+        return None
+    try:
+        # Si data URL, extraire la partie après la virgule
+        if ',' in b64 and b64.strip().lower().startswith('data:'):
+            b64 = b64.split(',', 1)[1]
+        raw = base64.b64decode(b64)
+        bio = BytesIO(raw)
+        img = Image(bio)
+        # Redimensionner en gardant les proportions dans une boîte max_width_cm x max_height_cm
+        max_w = max_width_cm * cm
+        max_h = max_height_cm * cm
+        iw, ih = img.wrap(0, 0)
+        if iw and ih:
+            scale = min(max_w / iw, max_h / ih)
+            img._restrictSize(max_w, max_h)
+            img.drawWidth = iw * scale
+            img.drawHeight = ih * scale
+        return img
+    except Exception:
+        # En cas d'erreur de décodage, ne rien afficher plutôt que de planter
+        return None
+
+
 def generate_conge_pdf(demande_conge):
     """Génère un PDF pour une demande de congé basé sur le formulaire officiel DRENA Abidjan 3"""
     buffer = BytesIO()
@@ -69,12 +99,13 @@ def generate_conge_pdf(demande_conge):
     story = []
     
     # En-tête avec logo et informations officielles
+    logo_el = _armoirie_image(max_width_cm=3.0, max_height_cm=3.0) or Spacer(1, 10)
     header_data = [
         [
             # Colonne gauche - Ministère
             Paragraph("MINISTÈRE DE L'ÉDUCATION NATIONALE<br/>ET DE L'ALPHABÉTISATION<br/>------------------------<br/>DIRECTION RÉGIONALE ABIDJAN 3", ministry_style),
-            # Colonne centre - Logo (placeholder)
-            Paragraph("🇨🇮", ParagraphStyle('Logo', parent=styles['Normal'], fontSize=30, alignment=TA_CENTER)),
+            # Colonne centre - Armoirie
+            logo_el,
             # Colonne droite - République
             Paragraph("RÉPUBLIQUE DE CÔTE D'IVOIRE<br/><br/>Union-Discipline-Travail", ministry_style)
         ]
@@ -244,12 +275,13 @@ def generate_absence_pdf(demande_absence):
     story = []
     
     # En-tête avec logo et informations officielles
+    logo_el = _armoirie_image(max_width_cm=3.0, max_height_cm=3.0) or Spacer(1, 10)
     header_data = [
         [
             # Colonne gauche - Ministère
             Paragraph("MINISTÈRE DE L'ÉDUCATION NATIONALE<br/>ET DE L'ALPHABÉTISATION<br/>------------------------<br/>DIRECTION RÉGIONALE ABIDJAN 3", ministry_style),
-            # Colonne centre - Logo (placeholder)
-            Paragraph("🇨🇮", ParagraphStyle('Logo', parent=styles['Normal'], fontSize=30, alignment=TA_CENTER)),
+            # Colonne centre - Armoirie
+            logo_el,
             # Colonne droite - République
             Paragraph("RÉPUBLIQUE DE CÔTE D'IVOIRE<br/><br/>Union-Discipline-Travail", ministry_style)
         ]

@@ -125,8 +125,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return instance
 
     def get_empreinte_hash(self, obj):
-        if obj.qr_code:
-            return obj.qr_code.url
+        # QR code functionality removed
         return None
 
     class Meta:
@@ -250,13 +249,11 @@ class UserSerializer(serializers.ModelSerializer):
         instance.save()
         # Update profile fields
         profile = getattr(instance, 'profile', None)
-        qr_code_needs_update = False
         if profile:
             # Matricule
             if matricule is not None and matricule != profile.matricule:
                 logger.info(f'[UserSerializer] Mise à jour du matricule: {profile.matricule} -> {matricule}')
                 profile.matricule = str(matricule)
-                qr_code_needs_update = True
             # Téléphone
             telephone = None
             if 'telephone' in validated_data:
@@ -290,39 +287,6 @@ class UserSerializer(serializers.ModelSerializer):
                     logger.info(f'[UserSerializer] Correction du rôle: {profile.role} -> {new_role}')
                     profile.role = new_role
             profile.save()
-            if qr_code_needs_update:
-                try:
-                    import qrcode
-                    from io import BytesIO
-                    from django.core.files.base import ContentFile
-                    qr_content = f"{profile.matricule or instance.username}"
-                    from PIL import Image, ImageDraw, ImageFont
-                    img = qrcode.make(qr_content)
-                    matricule_text = profile.matricule or instance.username
-                    img = img.convert('RGB')
-                    draw = ImageDraw.Draw(img)
-                    font = None
-                    try:
-                        font = ImageFont.truetype("arial.ttf", 18)
-                    except:
-                        font = ImageFont.load_default()
-                    bbox = draw.textbbox((0, 0), matricule_text, font=font)
-                    text_w = bbox[2] - bbox[0]
-                    text_h = bbox[3] - bbox[1]
-                    # Position: bottom-right corner with padding
-                    padding = 6
-                    x = img.width - text_w - padding
-                    y = img.height - text_h - padding
-                    # Draw a white rectangle for readability
-                    draw.rectangle([x - 2, y - 2, x + text_w + 2, y + text_h + 2], fill='white')
-                    draw.text((x, y), matricule_text, fill='black', font=font)
-                    buffer = BytesIO()
-                    img.save(buffer, format="PNG")
-                    file_name = f"qrcodes/agent_{profile.matricule or profile.id}.png"
-                    profile.qr_code.save(file_name, ContentFile(buffer.getvalue()), save=True)
-                    logger.info(f'[UserSerializer] QR code régénéré pour {profile.matricule}')
-                except Exception as e:
-                    logger.error(f'[UserSerializer] Error regenerating QR code: {str(e)}', exc_info=True)
         return instance
 
     def to_representation(self, instance):
