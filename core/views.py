@@ -1149,7 +1149,6 @@ class PresenceViewSet(viewsets.ModelViewSet):
             logger.error('[PresenceViewSet] Aucun profil Agent associé à cet utilisateur.')
             raise ValidationError('Aucun profil Agent associé à cet utilisateur.')
 
-        empreinte_hash_data = self.request.data.get('empreinte_hash_data')
         latitude = self.request.data.get('latitude')
         longitude = self.request.data.get('longitude')
         commentaire = self.request.data.get('commentaire')
@@ -1197,7 +1196,6 @@ class PresenceViewSet(viewsets.ModelViewSet):
             agent=agent_user,
             statut=statut,
             localisation_valide=localisation_valide,
-            empreinte_hash_data=empreinte_hash_data,
             latitude=latitude,
             longitude=longitude,
             commentaire=commentaire_final

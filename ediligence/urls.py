@@ -68,7 +68,6 @@ def api_home(request):
             # Présences et bureaux
             'presences': '/api/presences/',
             'bureaux': '/api/bureaux/',
-            'presence_fingerprint': '/api/presence/fingerprint/',
             'presence_stats': '/api/stats/presence/',
             
             # Notifications et permissions
@@ -81,9 +80,6 @@ def api_home(request):
             'user_diligence_comments': '/api/user-diligence-comments/',
             'user_diligence_instructions': '/api/user-diligence-instructions/',
             
-            # Empreintes digitales
-            'set_fingerprint': '/api/set-fingerprint/',
-            'verify_fingerprint': '/api/verify-fingerprint/',
         }
     })
 
