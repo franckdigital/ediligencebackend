@@ -1056,8 +1056,20 @@ class SimplePresenceView(APIView):
             return Response({'error': 'Position GPS requise'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Récupérer l'agent
-            agent = Agent.objects.get(user=user)
+            # Récupérer ou créer l'agent automatiquement
+            agent, created = Agent.objects.get_or_create(
+                user=user,
+                defaults={
+                    'nom': user.last_name or 'Nom',
+                    'prenom': user.first_name or 'Prénom',
+                    'matricule': f'A{user.id:04d}',
+                    'poste': getattr(user.profile, 'role', 'AGENT') if hasattr(user, 'profile') else 'AGENT'
+                }
+            )
+            
+            if created:
+                logger.info(f'[SimplePresenceView] Agent créé automatiquement pour {user.username}')
+            
             today = date.today()
             current_time = datetime.now().time()
             

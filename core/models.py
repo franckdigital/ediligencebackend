@@ -693,7 +693,7 @@ class Agent(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.nom} {self.prenom or ''} ({self.role})"
+        return f"{self.nom} {self.prenom or ''} ({self.poste})"
 
 
 class Presence(models.Model):
