@@ -76,6 +76,9 @@ CORS_ALLOW_ALL_ORIGINS = True  # En développement seulement
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "https://e-diligence.numerix.digital",
+    "https://numerix.digital",
+    "https://www.numerix.digital",
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -121,8 +124,9 @@ WSGI_APPLICATION = 'ediligence.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'diligence',
+        'NAME': 'diligence',#
         'USER': os.environ.get('DB_USER', 'root'),
+        #'PASSWORD': os.environ.get('DB_PASSWORD', 'root'),
         'PASSWORD': os.environ.get('DB_PASSWORD', 'xamil@IFE2025'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '3306'),

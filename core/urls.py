@@ -2,7 +2,7 @@ from rest_framework import routers
 from .views import (
 
     BureauViewSet,
-    PresenceFingerprintView,
+    # PresenceFingerprintView removed
     UserProfileView,
     ChangePasswordView,
     AdminRegistrationView,
@@ -13,7 +13,7 @@ from .views import (
     DeleteUserView
 )
 from .views_courrier_access import CourrierAccessViewSet
-from .views_fingerprint import SetFingerprintView, VerifyFingerprintView
+# Fingerprint views removed
 from .views import UserViewSet
 from .views_ import UserManagementViewSet, NotificationViewSet
 from .views import (
@@ -22,7 +22,7 @@ from .views import (
     DiligenceDownloadFichierView, ImputationFileViewSet, MaPresenceDuJourView,
     CustomTokenObtainPairView, ImputationAccessViewSet, UserDiligenceCommentViewSet,
     UserDiligenceInstructionViewSet, DemandeCongeViewSet, DemandeAbsenceViewSet,
-    CourrierImputationViewSet
+    CourrierImputationViewSet, SimplePresenceView
 )
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
@@ -75,9 +75,8 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(serializer_class=MyTokenObtainPairSerializer), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('presence/ma-presence-du-jour/', MaPresenceDuJourView.as_view(), name='ma-presence-du-jour'),
-    path('set-fingerprint/', SetFingerprintView.as_view(), name='set_fingerprint'),
-    path('verify-fingerprint/', VerifyFingerprintView.as_view(), name='verify_fingerprint'),
-    path('presence/fingerprint/', PresenceFingerprintView.as_view(), name='presence-fingerprint'),
+    # Fingerprint endpoints removed - using simple button presence now
+    path('presence/simple/', SimplePresenceView.as_view(), name='simple-presence'),
     path('stats/presence/', PresenceStatsAPIView.as_view(), name='presence-stats'),
     path('', include(router.urls)),
     path('auth/register/', AgentRegistrationView.as_view(), name='register'),

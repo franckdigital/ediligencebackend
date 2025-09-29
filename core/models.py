@@ -709,7 +709,7 @@ class Presence(models.Model):
     heure_arrivee = models.TimeField(null=True, blank=True)
     heure_depart = models.TimeField(null=True, blank=True)
     statut = models.CharField(max_length=32, choices=STATUT_CHOICES)
-    empreinte_hash = models.TextField(null=True, blank=True, help_text="Hash de l'empreinte digitale scannée")
+    # empreinte_hash removed - using simple button presence now
     latitude = models.DecimalField(max_digits=10, decimal_places=6)
     longitude = models.DecimalField(max_digits=10, decimal_places=6)
     localisation_valide = models.BooleanField(default=False)

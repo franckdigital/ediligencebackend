@@ -45,34 +45,7 @@ logger = logging.getLogger(__name__)
 import logging
 logger = logging.getLogger(__name__)
 
-class SetFingerprintView(APIView):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
-
-    def post(self, request):
-        fingerprint_hash = request.data.get('fingerprint_hash')
-        import logging
-        logging.warning("[DEBUG] user: %s id: %s", request.user, request.user.id)
-        if not fingerprint_hash:
-            logging.warning("[DEBUG] Aucun hash fourni")
-            return Response({'error': 'Aucun hash fourni'}, status=status.HTTP_400_BAD_REQUEST)
-        from django.db.models import Q
-        from core.models import UserProfile
-        profile = request.user.profile
-        # Vérifie unicité de l'empreinte pour tous sauf l'utilisateur courant
-        if UserProfile.objects.filter(~Q(user=profile.user), empreinte_hash=fingerprint_hash).exists():
-            return Response(
-                {'error': 'Cette empreinte digitale est déjà associée à un autre utilisateur.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        logging.warning("[DEBUG] Profile AVANT: %s", vars(profile))
-        profile.empreinte_hash = fingerprint_hash
-        profile.save()
-        logging.warning("[DEBUG] Profile APRÈS: %s", vars(profile))
-        import logging
-        logging.warning("CASCADE TEST LOG WARNING - DOIT APPARAITRE")
-        logging.error("CASCADE TEST LOG ERROR - DOIT APPARAITRE")
-        return Response({'success': True, 'empreinte_hash': fingerprint_hash})
+# SetFingerprintView removed - using simple button presence now
 
 class ImputationFileViewSet(viewsets.ModelViewSet):
     queryset = ImputationFile.objects.all()
@@ -151,37 +124,27 @@ class LoginView(APIView):
 
     def post(self, request, *args, **kwargs):
         print("LOGIN VIEW CALLED", request.data)
-        fingerprint_hash = request.data.get('fingerprint_hash')
-        if fingerprint_hash:
-            from .models import UserProfile
+        # Fingerprint authentication removed - using username/password only
+        username_or_email = request.data.get('username')
+        password = request.data.get('password')
+        print(f"Tentative de login pour : {username_or_email}")
+        from django.contrib.auth import get_user_model, authenticate
+        User = get_user_model()
+        user = authenticate(username=username_or_email, password=password)
+        print("AUTHENTICATE 1:", user)
+        if not user:
+            # Si username_or_email est un email, essayer de trouver le user correspondant
             try:
-                profile = UserProfile.objects.get(empreinte_hash=fingerprint_hash)
-                user = profile.user
-                print("AUTH VIA FINGERPRINT: ", user)
-            except UserProfile.DoesNotExist:
-                print("ECHEC AUTH: empreinte non reconnue")
-                return Response({'error': 'Empreinte non reconnue'}, status=status.HTTP_401_UNAUTHORIZED)
-        else:
-            username_or_email = request.data.get('username')
-            password = request.data.get('password')
-            print(f"Tentative de login pour : {username_or_email}")
-            from django.contrib.auth import get_user_model, authenticate
-            User = get_user_model()
-            user = authenticate(username=username_or_email, password=password)
-            print("AUTHENTICATE 1:", user)
-            if not user:
-                # Si username_or_email est un email, essayer de trouver le user correspondant
-                try:
-                    user_obj = User.objects.get(email=username_or_email)
-                    print("USER OBJ (par email):", user_obj)
-                    user = authenticate(username=user_obj.username, password=password)
-                    print("AUTHENTICATE 2:", user)
-                except User.DoesNotExist:
-                    print("NO USER OBJ pour cet email")
-                    user = None
-            if not user:
-                print("ECHEC AUTH: credentials invalid")
-                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+                user_obj = User.objects.get(email=username_or_email)
+                print("USER OBJ (par email):", user_obj)
+                user = authenticate(username=user_obj.username, password=password)
+                print("AUTHENTICATE 2:", user)
+            except User.DoesNotExist:
+                print("NO USER OBJ pour cet email")
+                user = None
+        if not user:
+            print("ECHEC AUTH: credentials invalid")
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
         token, _ = Token.objects.get_or_create(user=user)
         try:
             profile = user.profile
@@ -1065,29 +1028,81 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-class PresenceFingerprintView(APIView):
+# PresenceFingerprintView removed - using simple button presence now
+
+class SimplePresenceView(APIView):
+    """API simplifiée pour pointage par bouton mobile"""
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
 
     def post(self, request):
         import logging
+        from datetime import date, datetime
+        from .models import Agent, Presence
+        
         logger = logging.getLogger(__name__)
         user = request.user
-        logger.warning('[PresenceFingerprintView] Données reçues: %s', request.data)
-        empreinte_hash = request.data.get('empreinte_hash')
-        if not empreinte_hash:
-            logger.warning('[PresenceFingerprintView] empreinte_hash manquant')
-            return Response({'error': 'empreinte_hash requis'}, status=status.HTTP_400_BAD_REQUEST)
+        action = request.data.get('action')  # 'arrivee' ou 'depart'
+        latitude = request.data.get('latitude')
+        longitude = request.data.get('longitude')
+        
+        logger.info(f'[SimplePresenceView] User: {user}, Action: {action}')
+        
+        if not action or action not in ['arrivee', 'depart']:
+            return Response({'error': 'Action requise: arrivee ou depart'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not latitude or not longitude:
+            return Response({'error': 'Position GPS requise'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
-            Presence.objects.create(
-                utilisateur=user,
-                methode='empreinte',
-                empreinte_hash=empreinte_hash
+            # Récupérer l'agent
+            agent = Agent.objects.get(user=user)
+            today = date.today()
+            current_time = datetime.now().time()
+            
+            # Récupérer ou créer la présence du jour
+            presence, created = Presence.objects.get_or_create(
+                agent=agent,
+                date_presence=today,
+                defaults={
+                    'statut': 'présent',
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'localisation_valide': True,
+                }
             )
-            logger.info('[PresenceFingerprintView] Présence enregistrée pour user=%s', user)
-            return Response({'detail': 'Présence enregistrée avec succès.'}, status=status.HTTP_201_CREATED)
+            
+            if action == 'arrivee':
+                if presence.heure_arrivee:
+                    return Response({'error': 'Arrivée déjà enregistrée aujourd\'hui'}, status=status.HTTP_400_BAD_REQUEST)
+                presence.heure_arrivee = current_time
+                message = 'Arrivée enregistrée avec succès'
+            
+            elif action == 'depart':
+                if not presence.heure_arrivee:
+                    return Response({'error': 'Vous devez d\'abord pointer votre arrivée'}, status=status.HTTP_400_BAD_REQUEST)
+                if presence.heure_depart:
+                    return Response({'error': 'Départ déjà enregistré aujourd\'hui'}, status=status.HTTP_400_BAD_REQUEST)
+                presence.heure_depart = current_time
+                message = 'Départ enregistré avec succès'
+            
+            presence.save()
+            
+            return Response({
+                'success': True,
+                'message': message,
+                'presence': {
+                    'date': presence.date_presence,
+                    'heure_arrivee': presence.heure_arrivee,
+                    'heure_depart': presence.heure_depart,
+                    'statut': presence.statut
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Agent.DoesNotExist:
+            return Response({'error': 'Profil agent non trouvé'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error('[PresenceFingerprintView] Erreur lors de la création de la présence: %s', str(e))
+            logger.error(f'[SimplePresenceView] Erreur: {str(e)}')
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class PresenceViewSet(viewsets.ModelViewSet):
