@@ -32,7 +32,7 @@ from rest_framework.pagination import PageNumberPagination
 from .models import Direction, Service, Diligence, Courrier, UserProfile, Bureau, Presence, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence
 from .serializers import (
     CourrierSerializer, ServiceSerializer, DirectionSerializer, 
-    DiligenceSerializer, UserSerializer, ImputationAccessSerializer,
+    DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
     UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer,
     ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
     BureauSerializer, CourrierImputationSerializer

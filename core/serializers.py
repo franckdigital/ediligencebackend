@@ -392,17 +392,36 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         # Créer ou mettre à jour le profil utilisateur
         profile, created = UserProfile.objects.get_or_create(user=user)
         profile.role = role
+        updated = False
+        
         if service:
             profile.service = service
+            updated = True
+            
         if matricule:
             profile.matricule = matricule
-        if telephone:
             updated = True
-        if telephone and profile.telephone != telephone:
+            
+        if telephone:
             profile.telephone = telephone
             updated = True
-        if updated:
+            
+        if updated or created:
             profile.save()  # Déclenche aussi la génération du QR code si besoin
+
+        # Créer aussi un profil Agent si le rôle est AGENT
+        if role == 'AGENT':
+            from .models import Agent
+            agent, agent_created = Agent.objects.get_or_create(
+                user=user,
+                defaults={
+                    'nom': user.last_name or '',
+                    'prenom': user.first_name or '',
+                    'matricule': matricule or '',
+                    'poste': 'AGENT',
+                    'service': service
+                }
+            )
 
         return user
 
