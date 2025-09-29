@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.authentication import TokenAuthentication
 from django.contrib.auth.models import User
 from django.db.models import Q, Count, Prefetch
 from django.db import models
@@ -1033,7 +1034,7 @@ from rest_framework import status
 class SimplePresenceView(APIView):
     """API simplifiée pour pointage par bouton mobile"""
     permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = [JWTAuthentication, TokenAuthentication]
 
     def post(self, request):
         import logging
