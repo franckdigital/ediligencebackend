@@ -328,9 +328,18 @@ class PresenceSerializer(serializers.ModelSerializer):
     agent = serializers.PrimaryKeyRelatedField(read_only=True)
     
     class AgentSerializer(serializers.ModelSerializer):
+        service_obj = ServiceSerializer(source='service', read_only=True)
+        bureau_obj = serializers.SerializerMethodField()
+        
+        def get_bureau_obj(self, obj):
+            if obj.bureau:
+                return {'id': obj.bureau.id, 'nom': obj.bureau.nom}
+            return None
+        
         class Meta:
             model = Agent
-            fields = ['id', 'nom', 'prenom', 'matricule', 'poste', 'service', 'role']
+            fields = ['id', 'nom', 'prenom', 'matricule', 'poste', 'service', 'service_obj', 'bureau', 'bureau_obj']
+    
     agent_details = AgentSerializer(source='agent', read_only=True)
 
     class Meta:
@@ -839,10 +848,7 @@ class EtapeEvenementSerializer(serializers.ModelSerializer):
         model = EtapeEvenement
         fields = '__all__'
 
-class PresenceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Presence
-        fields = '__all__'
+# PresenceSerializer déjà défini plus haut avec agent_details
 
 class PrestataireSerializer(serializers.ModelSerializer):
     class Meta:
