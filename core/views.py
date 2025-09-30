@@ -20,7 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import mimetypes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.authtoken.models import Token
