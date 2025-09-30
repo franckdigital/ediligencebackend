@@ -29,13 +29,13 @@ from rest_framework.exceptions import PermissionDenied
 from .pdf_utils import generate_conge_pdf, generate_absence_pdf, create_pdf_response
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
-from .models import Direction, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence
+from .models import Direction, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence
 from .serializers import (
     CourrierSerializer, ServiceSerializer, DirectionSerializer, 
     DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
     UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer,
     ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
-    BureauSerializer, CourrierImputationSerializer, PresenceSerializer
+    BureauSerializer, CourrierImputationSerializer, PresenceSerializer, RolePermissionSerializer
 )
 from .permissions import IsProfileAdmin
 from django.contrib.auth.models import User
