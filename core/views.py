@@ -1012,13 +1012,18 @@ class MaPresenceDuJourView(APIView):
         try:
             agent = Agent.objects.get(user=user)
         except Agent.DoesNotExist:
-            return Response({'presence': False, 'depart': False})
+            return Response(None, status=status.HTTP_404_NOT_FOUND)
+        
         today = date.today()
-        # Présence (arrivée)
-        presence = Presence.objects.filter(agent=agent, date_presence=today, statut__in=['présent', 'arrivé']).exists()
-        # Départ
-        depart = Presence.objects.filter(agent=agent, date_presence=today, statut__in=['depart', 'départ']).exists()
-        return Response({'presence': presence, 'depart': depart})
+        
+        # Chercher la présence du jour
+        try:
+            presence = Presence.objects.get(agent=agent, date_presence=today)
+            serializer = PresenceSerializer(presence)
+            return Response(serializer.data)
+        except Presence.DoesNotExist:
+            # Aucune présence trouvée pour aujourd'hui
+            return Response(None, status=status.HTTP_404_NOT_FOUND)
 
 from .serializers import RolePermissionSerializer, PresenceSerializer
 from .models import RolePermission, Presence, Agent
