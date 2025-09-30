@@ -346,7 +346,7 @@ class PresenceSerializer(serializers.ModelSerializer):
         model = Presence
         fields = [
             'id', 'agent', 'agent_details', 'date_presence', 'heure_arrivee', 'heure_depart',
-            'statut', 'latitude', 'longitude', 'localisation_valide',
+            'statut', 'latitude', 'longitude', 'localisation_valide', 'device_fingerprint',
             'commentaire', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide', 'statut']

@@ -713,6 +713,7 @@ class Presence(models.Model):
     latitude = models.DecimalField(max_digits=10, decimal_places=6)
     longitude = models.DecimalField(max_digits=10, decimal_places=6)
     localisation_valide = models.BooleanField(default=False)
+    device_fingerprint = models.CharField(max_length=64, null=True, blank=True, help_text="Empreinte unique du téléphone")
     commentaire = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -725,6 +726,24 @@ class Presence(models.Model):
 
     def __str__(self):
         return f"{self.agent.username} - {self.date_presence} ({self.statut})"
+
+
+class DeviceRegistration(models.Model):
+    """Modèle pour enregistrer les appareils autorisés par utilisateur"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registered_devices')
+    device_fingerprint = models.CharField(max_length=64, unique=True, help_text="Empreinte unique du téléphone")
+    device_name = models.CharField(max_length=100, blank=True, help_text="Nom de l'appareil (optionnel)")
+    first_used = models.DateTimeField(auto_now_add=True)
+    last_used = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        verbose_name = 'Appareil enregistré'
+        verbose_name_plural = 'Appareils enregistrés'
+        unique_together = ('user', 'device_fingerprint')
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.device_fingerprint[:8]}..."
 
     def save(self, *args, **kwargs):
         # TODO: Calcul automatique du statut selon la logique métier (voir doc)

@@ -1152,6 +1152,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
         latitude = self.request.data.get('latitude')
         longitude = self.request.data.get('longitude')
         commentaire = self.request.data.get('commentaire')
+        device_fingerprint = self.request.data.get('device_fingerprint')
 
         localisation_valide = False
         commentaire_final = commentaire or ''
@@ -1191,6 +1192,39 @@ class PresenceViewSet(viewsets.ModelViewSet):
         else:
             commentaire_final += " [Avertissement : aucune configuration GPS de zone autorisée sur votre profil Agent.]"
 
+        # Vérification de l'empreinte du téléphone
+        if device_fingerprint:
+            from .models import DeviceRegistration
+            
+            # Vérifier si cet appareil est déjà utilisé par un autre utilisateur
+            existing_device = DeviceRegistration.objects.filter(
+                device_fingerprint=device_fingerprint,
+                is_active=True
+            ).exclude(user=agent_user).first()
+            
+            if existing_device:
+                logger.warning('[PresenceViewSet] Tentative d\'utilisation d\'un appareil déjà enregistré par %s', existing_device.user.username)
+                raise ValidationError({
+                    'error': 'Cet appareil est déjà enregistré pour un autre utilisateur. Chaque téléphone ne peut être utilisé que par un seul agent.'
+                })
+            
+            # Enregistrer ou mettre à jour l'appareil pour cet utilisateur
+            device_reg, created = DeviceRegistration.objects.get_or_create(
+                user=agent_user,
+                device_fingerprint=device_fingerprint,
+                defaults={
+                    'device_name': f'Mobile {Platform.OS}' if 'Platform' in globals() else 'Mobile',
+                    'is_active': True
+                }
+            )
+            
+            if not created:
+                # Mettre à jour la date de dernière utilisation
+                device_reg.last_used = timezone.now()
+                device_reg.save()
+            
+            logger.info('[PresenceViewSet] Appareil vérifié/enregistré: %s pour %s', device_fingerprint[:8], agent_user.username)
+
         logger.info('[PresenceViewSet] Création de la présence pour agent=%s', agent_user)
         serializer.save(
             agent=agent_user,
@@ -1198,6 +1232,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
             localisation_valide=localisation_valide,
             latitude=latitude,
             longitude=longitude,
+            device_fingerprint=device_fingerprint,
             commentaire=commentaire_final
         )
 
