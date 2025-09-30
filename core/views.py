@@ -1025,14 +1025,7 @@ class MaPresenceDuJourView(APIView):
             # Aucune présence trouvée pour aujourd'hui
             return Response(None, status=status.HTTP_404_NOT_FOUND)
 
-from .serializers import RolePermissionSerializer, PresenceSerializer
-from .models import RolePermission, Presence, Agent
-from math import radians, cos, sin, asin, sqrt
-
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework import status
+# Imports déjà présents en haut du fichier - suppression des doublons
 
 # PresenceFingerprintView removed - using simple button presence now
 
