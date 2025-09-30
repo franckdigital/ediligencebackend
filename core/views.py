@@ -1198,8 +1198,11 @@ class PresenceViewSet(viewsets.ModelViewSet):
             commentaire_final += " [Avertissement : aucune configuration GPS de zone autorisée sur votre profil Agent.]"
 
         # Vérification de l'empreinte du téléphone
+        logger.info('[PresenceViewSet] Device fingerprint reçu: %s', device_fingerprint)
         if device_fingerprint:
             from .models import DeviceRegistration
+            
+            logger.info('[PresenceViewSet] Vérification device fingerprint: %s pour utilisateur: %s', device_fingerprint[:8], agent_user.username)
             
             # Vérifier si cet appareil est déjà utilisé par un autre utilisateur
             existing_device = DeviceRegistration.objects.filter(
@@ -1208,9 +1211,10 @@ class PresenceViewSet(viewsets.ModelViewSet):
             ).exclude(user=agent_user).first()
             
             if existing_device:
-                logger.warning('[PresenceViewSet] Tentative d\'utilisation d\'un appareil déjà enregistré par %s', existing_device.user.username)
+                logger.warning('[PresenceViewSet] 🚫 RESTRICTION ACTIVÉE - Appareil %s déjà utilisé par %s, refus pour %s', 
+                             device_fingerprint[:8], existing_device.user.username, agent_user.username)
                 raise ValidationError({
-                    'error': 'Cet appareil est déjà enregistré pour un autre utilisateur. Chaque téléphone ne peut être utilisé que par un seul agent.'
+                    'error': f'Cet appareil est déjà enregistré pour {existing_device.user.username}. Chaque téléphone ne peut être utilisé que par un seul agent.'
                 })
             
             # Enregistrer ou mettre à jour l'appareil pour cet utilisateur
@@ -1227,8 +1231,11 @@ class PresenceViewSet(viewsets.ModelViewSet):
                 # Mettre à jour la date de dernière utilisation
                 device_reg.last_used = timezone.now()
                 device_reg.save()
-            
-            logger.info('[PresenceViewSet] Appareil vérifié/enregistré: %s pour %s', device_fingerprint[:8], agent_user.username)
+                logger.info('[PresenceViewSet] ✅ Appareil existant mis à jour: %s pour %s', device_fingerprint[:8], agent_user.username)
+            else:
+                logger.info('[PresenceViewSet] ✅ Nouvel appareil enregistré: %s pour %s', device_fingerprint[:8], agent_user.username)
+        else:
+            logger.warning('[PresenceViewSet] ⚠️ Aucune empreinte device reçue - restriction non appliquée')
 
         logger.info('[PresenceViewSet] Création de la présence pour agent=%s', agent_user)
         serializer.save(
