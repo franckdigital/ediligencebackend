@@ -1065,6 +1065,46 @@ class SimplePresenceView(APIView):
                 }
             )
             
+            # Vérification de la distance par rapport au bureau
+            from .models import Bureau
+            from math import radians, cos, sin, asin, sqrt
+            
+            # Récupérer le bureau de l'agent ou le bureau principal
+            bureau = agent.bureau if agent.bureau else Bureau.objects.filter(nom__icontains='Principal').first()
+            if not bureau:
+                bureau = Bureau.objects.first()  # Fallback sur le premier bureau
+            
+            if bureau and bureau.latitude_centre and bureau.longitude_centre:
+                # Fonction de calcul de distance (Haversine)
+                def haversine(lat1, lon1, lat2, lon2):
+                    R = 6371000  # Rayon de la Terre en mètres
+                    phi1 = radians(lat1)
+                    phi2 = radians(lat2)
+                    dphi = radians(lat2 - lat1)
+                    dlambda = radians(lon2 - lon1)
+                    a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2)**2
+                    c = 2*asin(sqrt(a))
+                    return R * c
+                
+                # Calculer la distance
+                distance = haversine(
+                    float(latitude), float(longitude),
+                    float(bureau.latitude_centre), float(bureau.longitude_centre)
+                )
+                
+                # Rayon autorisé (50-100m selon les paramètres du bureau)
+                rayon_autorise = bureau.rayon_metres if bureau.rayon_metres else 100
+                
+                logger.info(f'[SimplePresenceView] Distance calculée: {distance:.1f}m, Rayon autorisé: {rayon_autorise}m')
+                
+                if distance > rayon_autorise:
+                    return Response({
+                        'error': f'Vous êtes trop loin du bureau pour pointer ({distance:.1f}m > {rayon_autorise}m). Veuillez vous rapprocher.',
+                        'distance': round(distance, 1),
+                        'rayon_autorise': rayon_autorise,
+                        'bureau': bureau.nom
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
             if created:
                 logger.info(f'[SimplePresenceView] Agent créé automatiquement pour {user.username}')
             
@@ -1155,14 +1195,19 @@ class PresenceViewSet(viewsets.ModelViewSet):
         localisation_valide = False
         commentaire_final = commentaire or ''
 
-        # Validation GPS si config présente
-        if agent_obj.latitude_centre and agent_obj.longitude_centre and agent_obj.rayon_metres:
+        # Validation GPS par rapport au bureau
+        from .models import Bureau
+        bureau = agent_obj.bureau if agent_obj.bureau else Bureau.objects.filter(nom__icontains='Principal').first()
+        if not bureau:
+            bureau = Bureau.objects.first()  # Fallback sur le premier bureau
+            
+        if bureau and bureau.latitude_centre and bureau.longitude_centre:
             try:
                 lat1 = float(latitude)
                 lon1 = float(longitude)
-                lat2 = float(agent_obj.latitude_centre)
-                lon2 = float(agent_obj.longitude_centre)
-                rayon = 50.0  # Rayon fixe de 50 mètres
+                lat2 = float(bureau.latitude_centre)
+                lon2 = float(bureau.longitude_centre)
+                rayon = float(bureau.rayon_metres) if bureau.rayon_metres else 100.0  # Rayon configurable
 
                 # Haversine
                 def haversine(lat1, lon1, lat2, lon2):
