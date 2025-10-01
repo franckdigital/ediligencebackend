@@ -2,6 +2,10 @@ Django>=4.0
 PyMySQL>=1.0
 pytz
 python-dotenv
+requests>=2.25.0
+# Celery pour les tâches asynchrones
+celery>=5.2.0
+redis>=4.0.0
 # Auth & API
 djangorestframework
 djangorestframework-simplejwt
