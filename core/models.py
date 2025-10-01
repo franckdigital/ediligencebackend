@@ -1109,7 +1109,7 @@ class PushNotificationToken(models.Model):
     ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_tokens')
-    token = models.TextField(unique=True, help_text="Token FCM/APNS")
+    token = models.CharField(max_length=500, unique=True, help_text="Token FCM/APNS")
     platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES)
     device_id = models.CharField(max_length=255, blank=True, null=True)
     
@@ -1121,7 +1121,6 @@ class PushNotificationToken(models.Model):
     class Meta:
         verbose_name = 'Token de notification push'
         verbose_name_plural = 'Tokens de notification push'
-        unique_together = ('user', 'token')
     
     def __str__(self):
         return f"{self.user.username} - {self.platform} - {self.token[:20]}..."
