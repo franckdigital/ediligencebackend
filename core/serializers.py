@@ -13,7 +13,8 @@ from core.models import (
     Bureau, RolePermission, TacheHistorique, Agent, Presence,
     Notification, Observation, EtapeEvenement, Prestataire, 
     PrestataireEtape, Evaluation, DiligenceDocument, ImputationAccess,
-    Fichier, Commentaire, Tache, Activite, Domaine, Projet
+    Fichier, Commentaire, Tache, Activite, Domaine, Projet,
+    GeofenceAlert, GeofenceSettings, AgentLocation, PushNotificationToken
 )
 
 class ImputationFileSerializer(serializers.ModelSerializer):

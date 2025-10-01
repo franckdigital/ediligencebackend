@@ -26,6 +26,7 @@ from .views import (
 )
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
+from .geofencing_views import GeofenceAlertViewSet, GeofenceSettingsViewSet, AgentLocationViewSet, PushNotificationTokenViewSet
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from core.views_stats import PresenceStatsAPIView
@@ -69,6 +70,12 @@ router.register(r'projets', ProjetViewSet)
 router.register(r'taches', TacheViewSet)
 router.register(r'commentaires', CommentaireViewSet)
 router.register(r'fichiers', FichierViewSet)
+
+# --- ROUTES GÉOFENCING ---
+router.register(r'geofence-alerts', GeofenceAlertViewSet, basename='geofence-alerts')
+router.register(r'geofence-settings', GeofenceSettingsViewSet, basename='geofence-settings')
+router.register(r'agent-locations', AgentLocationViewSet, basename='agent-locations')
+router.register(r'push-tokens', PushNotificationTokenViewSet, basename='push-tokens')
 
 urlpatterns = [
     path('token/custom/', CustomTokenObtainPairView.as_view(), name='custom_token_obtain_pair'),

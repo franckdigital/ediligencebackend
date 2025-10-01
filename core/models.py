@@ -940,3 +940,188 @@ class DemandeAbsence(models.Model):
             delta = self.date_fin - self.date_debut
             self.duree_heures = delta.total_seconds() / 3600
         super().save(*args, **kwargs)
+
+
+# --- MODÈLES POUR GÉOFENCING ET ALERTES ---
+
+class GeofenceAlert(models.Model):
+    """Modèle pour les alertes de géofencing lorsqu'un agent sort de la zone autorisée"""
+    ALERT_TYPE_CHOICES = [
+        ('sortie_zone', 'Sortie de zone'),
+        ('entree_zone', 'Entrée en zone'),
+        ('hors_horaires', 'Hors horaires de travail'),
+    ]
+    
+    STATUT_CHOICES = [
+        ('active', 'Active'),
+        ('resolue', 'Résolue'),
+        ('ignoree', 'Ignorée'),
+    ]
+    
+    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='geofence_alerts')
+    bureau = models.ForeignKey('Bureau', on_delete=models.CASCADE, related_name='geofence_alerts')
+    type_alerte = models.CharField(max_length=20, choices=ALERT_TYPE_CHOICES, default='sortie_zone')
+    
+    # Position de l'agent au moment de l'alerte
+    latitude_agent = models.DecimalField(max_digits=22, decimal_places=17)
+    longitude_agent = models.DecimalField(max_digits=22, decimal_places=17)
+    distance_metres = models.IntegerField(help_text="Distance en mètres par rapport au centre du bureau")
+    
+    # Informations temporelles
+    timestamp_alerte = models.DateTimeField(auto_now_add=True)
+    heure_detection = models.TimeField(auto_now_add=True)
+    date_detection = models.DateField(auto_now_add=True)
+    
+    # Contexte de l'alerte
+    en_heures_travail = models.BooleanField(default=True, help_text="True si l'alerte s'est produite pendant les heures de travail")
+    message_alerte = models.TextField(blank=True, null=True)
+    
+    # Statut et résolution
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='active')
+    resolu_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='geofence_alerts_resolues')
+    date_resolution = models.DateTimeField(null=True, blank=True)
+    commentaire_resolution = models.TextField(blank=True, null=True)
+    
+    # Notifications envoyées
+    notification_envoyee = models.BooleanField(default=False)
+    notification_push_envoyee = models.BooleanField(default=False)
+    
+    class Meta:
+        verbose_name = 'Alerte de géofencing'
+        verbose_name_plural = 'Alertes de géofencing'
+        ordering = ['-timestamp_alerte']
+        indexes = [
+            models.Index(fields=['agent', 'date_detection']),
+            models.Index(fields=['bureau', 'timestamp_alerte']),
+            models.Index(fields=['statut', 'en_heures_travail']),
+        ]
+    
+    def __str__(self):
+        return f"Alerte {self.get_type_alerte_display()} - {self.agent.username} - {self.timestamp_alerte.strftime('%d/%m/%Y %H:%M')}"
+    
+    def save(self, *args, **kwargs):
+        # Générer automatiquement le message d'alerte
+        if not self.message_alerte:
+            if self.type_alerte == 'sortie_zone':
+                self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} s'est éloigné(e) de {self.distance_metres}m du bureau {self.bureau.nom}"
+            elif self.type_alerte == 'entree_zone':
+                self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} est entré(e) dans la zone du bureau {self.bureau.nom}"
+            elif self.type_alerte == 'hors_horaires':
+                self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} est détecté(e) hors des heures de travail"
+        
+        super().save(*args, **kwargs)
+
+
+class GeofenceSettings(models.Model):
+    """Configuration globale du système de géofencing"""
+    
+    # Heures de travail
+    heure_debut_matin = models.TimeField(default='07:30', help_text="Début des heures de travail du matin")
+    heure_fin_matin = models.TimeField(default='12:30', help_text="Fin des heures de travail du matin")
+    heure_debut_apres_midi = models.TimeField(default='13:30', help_text="Début des heures de travail de l'après-midi")
+    heure_fin_apres_midi = models.TimeField(default='16:30', help_text="Fin des heures de travail de l'après-midi")
+    
+    # Configuration des alertes
+    distance_alerte_metres = models.IntegerField(default=200, help_text="Distance en mètres pour déclencher une alerte")
+    duree_minimale_hors_bureau_minutes = models.IntegerField(default=60, help_text="Durée minimale hors du bureau en minutes avant alerte")
+    frequence_verification_minutes = models.IntegerField(default=5, help_text="Fréquence de vérification de la position en minutes")
+    
+    # Jours de travail
+    lundi_travaille = models.BooleanField(default=True)
+    mardi_travaille = models.BooleanField(default=True)
+    mercredi_travaille = models.BooleanField(default=True)
+    jeudi_travaille = models.BooleanField(default=True)
+    vendredi_travaille = models.BooleanField(default=True)
+    samedi_travaille = models.BooleanField(default=False)
+    dimanche_travaille = models.BooleanField(default=False)
+    
+    # Notifications
+    notification_directeurs = models.BooleanField(default=True, help_text="Envoyer des notifications aux directeurs")
+    notification_superieurs = models.BooleanField(default=True, help_text="Envoyer des notifications aux supérieurs")
+    notification_push_active = models.BooleanField(default=True, help_text="Activer les notifications push")
+    
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Configuration géofencing'
+        verbose_name_plural = 'Configurations géofencing'
+    
+    def __str__(self):
+        return f"Configuration géofencing - Modifiée le {self.updated_at.strftime('%d/%m/%Y %H:%M')}"
+    
+    def is_heure_travail(self, datetime_obj):
+        """Vérifie si une datetime donnée est dans les heures de travail"""
+        jour_semaine = datetime_obj.weekday()  # 0=lundi, 6=dimanche
+        heure = datetime_obj.time()
+        
+        # Vérifier si c'est un jour de travail
+        jours_travail = [
+            self.lundi_travaille, self.mardi_travaille, self.mercredi_travaille,
+            self.jeudi_travaille, self.vendredi_travaille, self.samedi_travaille,
+            self.dimanche_travaille
+        ]
+        
+        if not jours_travail[jour_semaine]:
+            return False
+        
+        # Vérifier les heures
+        return (self.heure_debut_matin <= heure <= self.heure_fin_matin) or \
+               (self.heure_debut_apres_midi <= heure <= self.heure_fin_apres_midi)
+
+
+class AgentLocation(models.Model):
+    """Modèle pour stocker l'historique des positions des agents"""
+    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='locations')
+    latitude = models.DecimalField(max_digits=22, decimal_places=17)
+    longitude = models.DecimalField(max_digits=22, decimal_places=17)
+    accuracy = models.FloatField(null=True, blank=True, help_text="Précision GPS en mètres")
+    
+    # Informations contextuelles
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_background = models.BooleanField(default=False, help_text="Position capturée en arrière-plan")
+    battery_level = models.IntegerField(null=True, blank=True, help_text="Niveau de batterie du téléphone")
+    
+    # Calculs automatiques
+    distance_bureau = models.FloatField(null=True, blank=True, help_text="Distance calculée par rapport au bureau assigné")
+    dans_zone_autorisee = models.BooleanField(default=True)
+    
+    class Meta:
+        verbose_name = 'Position agent'
+        verbose_name_plural = 'Positions agents'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['agent', 'timestamp']),
+            models.Index(fields=['timestamp', 'dans_zone_autorisee']),
+        ]
+    
+    def __str__(self):
+        return f"{self.agent.username} - {self.timestamp.strftime('%d/%m/%Y %H:%M:%S')}"
+
+
+class PushNotificationToken(models.Model):
+    """Modèle pour stocker les tokens de notification push des utilisateurs"""
+    PLATFORM_CHOICES = [
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_tokens')
+    token = models.TextField(unique=True, help_text="Token FCM/APNS")
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES)
+    device_id = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Métadonnées
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Token de notification push'
+        verbose_name_plural = 'Tokens de notification push'
+        unique_together = ('user', 'token')
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.platform} - {self.token[:20]}..."
