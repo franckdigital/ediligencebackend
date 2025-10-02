@@ -1,34 +1,22 @@
 from rest_framework import routers
+from rest_framework.routers import DefaultRouter
 from .views import (
-
-    BureauViewSet,
-    # PresenceFingerprintView removed
-    UserProfileView,
-    ChangePasswordView,
-    AdminRegistrationView,
-    AgentRegistrationView,
-    LoginView,
-    ListUsersView,
-    RetrieveUserView,
-    DeleteUserView
+    DirectionViewSet, SousDirectionViewSet, ServiceViewSet, CourrierViewSet, DiligenceViewSet,
+    UserViewSet, LoginView, UserProfileView,
+    ChangePasswordView, ListUsersView, RetrieveUserView,
+    AdminRegistrationView, BureauViewSet, PresenceViewSet, RolePermissionViewSet,
+    ImputationAccessViewSet, CourrierImputationViewSet, ImputationFileViewSet,
+    UserDiligenceCommentViewSet, UserDiligenceInstructionViewSet,
+    DemandeCongeViewSet, DemandeAbsenceViewSet, UpdatePresenceStatusView, DeleteUserView,
+    CustomTokenObtainPairView, MaPresenceDuJourView, SimplePresenceView, AgentRegistrationView,
+    DiligenceDownloadFichierView
 )
 from .views_courrier_access import CourrierAccessViewSet
-# Fingerprint views removed
-from .views import UserViewSet
-from .views_ import UserManagementViewSet, NotificationViewSet
-from .views import (
-    DirectionViewSet, ServiceViewSet, DiligenceViewSet, CourrierViewSet, 
-    UserViewSet, BureauViewSet, PresenceViewSet, RolePermissionViewSet,
-    DiligenceDownloadFichierView, ImputationFileViewSet, MaPresenceDuJourView,
-    CustomTokenObtainPairView, ImputationAccessViewSet, UserDiligenceCommentViewSet,
-    UserDiligenceInstructionViewSet, DemandeCongeViewSet, DemandeAbsenceViewSet,
-    CourrierImputationViewSet, SimplePresenceView, UpdatePresenceStatusView
-)
+from .views_ import UserManagementViewSet, NotificationViewSet, UserRegistrationView
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
 from .geofencing_views import GeofenceAlertViewSet, GeofenceSettingsViewSet, AgentLocationViewSet, PushNotificationTokenViewSet
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
 from core.views_stats import PresenceStatsAPIView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
 from .serializers import MyTokenObtainPairSerializer
@@ -36,6 +24,7 @@ from .serializers import MyTokenObtainPairSerializer
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'directions', DirectionViewSet)
+router.register(r'sous-directions', SousDirectionViewSet)
 router.register(r'services', ServiceViewSet)
 router.register(r'courriers', CourrierViewSet)
 router.register(r'courrier-access', CourrierAccessViewSet)

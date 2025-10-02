@@ -21,7 +21,7 @@ class ImputationFile(models.Model):
         return f"{self.diligence} - {self.agent} ({self.mode})"
 
 class Direction(models.Model):
-    """Une Direction est une entité qui regroupe plusieurs services.
+    """Une Direction est une entité qui regroupe plusieurs sous-directions.
     Par exemple: Direction des Ressources Humaines, Direction Financière, etc."""
     nom = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
@@ -37,8 +37,48 @@ class Direction(models.Model):
         return self.nom
     
     @property
+    def nombre_sous_directions(self):
+        """Retourne le nombre de sous-directions dans cette direction"""
+        return self.sous_directions.count()
+    
+    @property
     def nombre_services(self):
-        """Retourne le nombre de services dans cette direction"""
+        """Retourne le nombre total de services dans cette direction (via les sous-directions)"""
+        return Service.objects.filter(sous_direction__direction=self).count()
+
+    def save(self, *args, **kwargs):
+        if not self.created_at:
+            self.created_at = timezone.now()
+        self.updated_at = timezone.now()
+        super().save(*args, **kwargs)
+
+
+class SousDirection(models.Model):
+    """Une Sous-Direction appartient à une Direction et regroupe plusieurs services.
+    Par exemple: Sous-Direction Paie (Direction RH), Sous-Direction Comptabilité (Direction Financière)"""
+    nom = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    direction = models.ForeignKey(
+        Direction,
+        on_delete=models.CASCADE,
+        related_name='sous_directions',
+        help_text='La direction à laquelle cette sous-direction appartient'
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Sous-Direction'
+        verbose_name_plural = 'Sous-Directions'
+        ordering = ['direction__nom', 'nom']
+        unique_together = ['nom', 'direction']  # Un nom de sous-direction doit être unique dans une direction
+
+    def __str__(self):
+        return f"{self.nom} ({self.direction.nom})"
+    
+    @property
+    def nombre_services(self):
+        """Retourne le nombre de services dans cette sous-direction"""
         return self.services.count()
 
     def save(self, *args, **kwargs):
@@ -48,16 +88,25 @@ class Direction(models.Model):
         super().save(*args, **kwargs)
 
 class Service(models.Model):
-    """Un Service est une unité qui appartient à une Direction.
-    Par exemple: Service Paie (Direction RH), Service Comptabilité (Direction Financière)"""
+    """Un Service est une unité qui appartient à une Sous-Direction.
+    Par exemple: Service Paie (Sous-Direction RH), Service Comptabilité (Sous-Direction Financière)"""
     nom = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    sous_direction = models.ForeignKey(
+        SousDirection,
+        on_delete=models.CASCADE,  # Si une sous-direction est supprimée, ses services le sont aussi
+        related_name='services',
+        help_text='La sous-direction à laquelle ce service appartient',
+        null=True,  # Temporairement nullable pour la migration
+        blank=True
+    )
+    # Garder temporairement direction pour la migration
     direction = models.ForeignKey(
         Direction,
-        on_delete=models.CASCADE,  # Si une direction est supprimée, ses services le sont aussi
-        related_name='services',
-        help_text='La direction à laquelle ce service appartient',
-        null=True,  # Temporairement nullable pour la migration
+        on_delete=models.CASCADE,
+        related_name='services_legacy',
+        help_text='DEPRECATED: Utilisez sous_direction à la place',
+        null=True,
         blank=True
     )
     created_at = models.DateTimeField(default=timezone.now)
@@ -66,11 +115,22 @@ class Service(models.Model):
     class Meta:
         verbose_name = 'Service'
         verbose_name_plural = 'Services'
-        ordering = ['direction__nom', 'nom']  # Trié par direction puis par nom de service
-        unique_together = ['nom', 'direction']  # Un nom de service doit être unique dans une direction
+        ordering = ['sous_direction__direction__nom', 'sous_direction__nom', 'nom']  # Trié par direction > sous-direction > service
+        unique_together = ['nom', 'sous_direction']  # Un nom de service doit être unique dans une sous-direction
     
     def __str__(self):
-        return f"{self.nom} ({self.direction.nom})"
+        if self.sous_direction:
+            return f"{self.nom} ({self.sous_direction.nom} - {self.sous_direction.direction.nom})"
+        elif self.direction:
+            return f"{self.nom} ({self.direction.nom})"
+        return self.nom
+    
+    @property
+    def get_direction(self):
+        """Retourne la direction via la sous-direction ou directement"""
+        if self.sous_direction:
+            return self.sous_direction.direction
+        return self.direction
 
     def save(self, *args, **kwargs):
         if not self.created_at:

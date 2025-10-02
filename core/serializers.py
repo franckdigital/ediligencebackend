@@ -7,7 +7,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from core.models import (
-    UserProfile, Service, Direction, Courrier, CourrierAccess, CourrierImputation,
+    UserProfile, Service, Direction, SousDirection, Courrier, CourrierAccess, CourrierImputation,
     UserDiligenceComment, UserDiligenceInstruction, DemandeConge, 
     DemandeAbsence, ImputationFile, DiligenceNotification, Diligence,
     Bureau, RolePermission, TacheHistorique, Agent, Presence,
@@ -444,12 +444,23 @@ class DirectionSerializer(serializers.ModelSerializer):
             'description': service.description
         } for service in obj.services.all()]
 
-class ServiceSerializer(serializers.ModelSerializer):
+class SousDirectionSerializer(serializers.ModelSerializer):
     direction_nom = serializers.CharField(source='direction.nom', read_only=True)
+    nombre_services = serializers.ReadOnlyField()
+
+    class Meta:
+        model = SousDirection
+        fields = ['id', 'nom', 'description', 'direction', 'direction_nom', 'nombre_services', 'created_at', 'updated_at']
+
+
+class ServiceSerializer(serializers.ModelSerializer):
+    direction_nom = serializers.CharField(source='get_direction.nom', read_only=True)
+    sous_direction_nom = serializers.CharField(source='sous_direction.nom', read_only=True)
+    sous_direction_obj = SousDirectionSerializer(source='sous_direction', read_only=True)
 
     class Meta:
         model = Service
-        fields = ['id', 'nom', 'description', 'direction', 'direction_nom']
+        fields = ['id', 'nom', 'description', 'sous_direction', 'sous_direction_nom', 'sous_direction_obj', 'direction', 'direction_nom']
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

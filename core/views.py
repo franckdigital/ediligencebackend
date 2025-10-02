@@ -29,9 +29,9 @@ from rest_framework.exceptions import PermissionDenied
 from .pdf_utils import generate_conge_pdf, generate_absence_pdf, create_pdf_response
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
-from .models import Direction, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence
+from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence
 from .serializers import (
-    CourrierSerializer, ServiceSerializer, DirectionSerializer, 
+    CourrierSerializer, ServiceSerializer, DirectionSerializer, SousDirectionSerializer,
     DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
     UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer,
     ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
@@ -376,9 +376,9 @@ class DirectionViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        queryset = Direction.objects.prefetch_related('services').all().order_by('-created_at')
+        queryset = Direction.objects.prefetch_related('sous_directions__services').all().order_by('-created_at')
         for direction in queryset:
-            print(f'Direction {direction.nom} services:', [s.nom for s in direction.services.all()])
+            print(f'Direction {direction.nom} sous-directions:', [sd.nom for sd in direction.sous_directions.all()])
         return queryset
 
     def perform_create(self, serializer):
@@ -390,19 +390,56 @@ class DirectionViewSet(viewsets.ModelViewSet):
         instance.save()
 
     def perform_destroy(self, instance):
-        # Vérifier si la direction a des services associés
+        # Vérifier si la direction a des sous-directions associées
+        if instance.sous_directions.exists():
+            raise serializers.ValidationError("Cette direction contient des sous-directions et ne peut pas être supprimée.")
+        instance.delete()
+
+
+class SousDirectionViewSet(viewsets.ModelViewSet):
+    queryset = SousDirection.objects.all()
+    serializer_class = SousDirectionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get_queryset(self):
+        queryset = SousDirection.objects.select_related('direction').prefetch_related('services').all().order_by('-created_at')
+        direction_id = self.request.query_params.get('direction', None)
+        if direction_id:
+            queryset = queryset.filter(direction=direction_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        instance.updated_at = timezone.now()
+        instance.save()
+
+    def perform_destroy(self, instance):
+        # Vérifier si la sous-direction a des services associés
         if instance.services.exists():
-            raise serializers.ValidationError("Cette direction contient des services et ne peut pas être supprimée.")
+            raise serializers.ValidationError("Cette sous-direction contient des services et ne peut pas être supprimée.")
         instance.delete()
 
 class ServiceViewSet(viewsets.ModelViewSet):
-    queryset = Service.objects.select_related('direction').all()
+    queryset = Service.objects.select_related('sous_direction__direction', 'direction').all()
     serializer_class = ServiceSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        return Service.objects.select_related('direction').all().order_by('-created_at')
+        queryset = Service.objects.select_related('sous_direction__direction', 'direction').all().order_by('-created_at')
+        sous_direction_id = self.request.query_params.get('sous_direction', None)
+        direction_id = self.request.query_params.get('direction', None)
+        
+        if sous_direction_id:
+            queryset = queryset.filter(sous_direction=sous_direction_id)
+        elif direction_id:
+            queryset = queryset.filter(sous_direction__direction=direction_id)
+            
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save()
