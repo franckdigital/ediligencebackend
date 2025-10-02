@@ -21,25 +21,26 @@ cd $PROJECT_DIR
 echo -e "${YELLOW}Étape 1: Activation de l'environnement virtuel${NC}"
 source venv/bin/activate
 
-echo -e "${YELLOW}Étape 2: Sauvegarde de la base de données${NC}"
-python manage.py dumpdata core.Service > backup_services_$(date +%Y%m%d_%H%M%S).json
-python manage.py dumpdata core.Direction > backup_directions_$(date +%Y%m%d_%H%M%S).json
-echo -e "${GREEN}✓ Sauvegarde terminée${NC}"
-
-echo -e "${YELLOW}Étape 3: Vérification de l'état des migrations${NC}"
+echo -e "${YELLOW}Étape 2: Vérification de l'état des migrations${NC}"
 python manage.py showmigrations core | tail -10
 
-echo -e "${YELLOW}Étape 4: Application de la migration 0033 (SousDirection)${NC}"
+echo -e "${YELLOW}Étape 3: Application de la migration 0033 (SousDirection)${NC}"
 python manage.py migrate core 0033
 echo -e "${GREEN}✓ Migration 0033 appliquée${NC}"
 
-echo -e "${YELLOW}Étape 5: Application de la migration 0034 (Nouveaux rôles)${NC}"
+echo -e "${YELLOW}Étape 4: Application de la migration 0034 (Nouveaux rôles)${NC}"
 python manage.py migrate core 0034
 echo -e "${GREEN}✓ Migration 0034 appliquée${NC}"
 
-echo -e "${YELLOW}Étape 6: Migration des données existantes${NC}"
+echo -e "${YELLOW}Étape 5: Migration des données existantes${NC}"
 python migrate_services_to_sous_directions.py
 echo -e "${GREEN}✓ Données migrées${NC}"
+
+echo -e "${YELLOW}Étape 6: Sauvegarde de la base de données (optionnel)${NC}"
+python manage.py dumpdata core.Service > backup_services_$(date +%Y%m%d_%H%M%S).json
+python manage.py dumpdata core.Direction > backup_directions_$(date +%Y%m%d_%H%M%S).json
+python manage.py dumpdata core.SousDirection > backup_sousdirections_$(date +%Y%m%d_%H%M%S).json
+echo -e "${GREEN}✓ Sauvegarde terminée${NC}"
 
 echo -e "${YELLOW}Étape 7: Vérification de la structure${NC}"
 python manage.py shell << EOF

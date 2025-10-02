@@ -67,6 +67,15 @@ Ce script va :
 - Migrer tous les services existants vers ces sous-directions
 - Afficher un résumé de la structure
 
+### Étape 4 : Sauvegarder les données (OPTIONNEL)
+
+```bash
+# Après la migration, vous pouvez sauvegarder l'état actuel
+python manage.py dumpdata core.Service > backup_services_$(date +%Y%m%d_%H%M%S).json
+python manage.py dumpdata core.Direction > backup_directions_$(date +%Y%m%d_%H%M%S).json
+python manage.py dumpdata core.SousDirection > backup_sousdirections_$(date +%Y%m%d_%H%M%S).json
+```
+
 ### Étape 5 : Redémarrer les services
 
 ```bash

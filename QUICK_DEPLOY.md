@@ -9,18 +9,18 @@ cd /var/www/numerix/ediligencebackend
 source venv/bin/activate
 ```
 
-### 2. Sauvegarder les données (IMPORTANT)
-
-```bash
-python manage.py dumpdata core.Service > backup_services_$(date +%Y%m%d_%H%M%S).json
-python manage.py dumpdata core.Direction > backup_directions_$(date +%Y%m%d_%H%M%S).json
-```
-
-### 3. Appliquer les migrations
+### 2. Appliquer les migrations
 
 ```bash
 python manage.py migrate core 0033
 python manage.py migrate core 0034
+```
+
+### 3. Sauvegarder les données (OPTIONNEL - après migration)
+
+```bash
+python manage.py dumpdata core.Service > backup_services_$(date +%Y%m%d_%H%M%S).json
+python manage.py dumpdata core.Direction > backup_directions_$(date +%Y%m%d_%H%M%S).json
 ```
 
 ### 4. Migrer les données existantes
