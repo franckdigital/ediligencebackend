@@ -48,7 +48,10 @@ def check_agent_exits():
             agent = presence.agent
             bureau = agent.bureau
             
+            logger.info(f"🔍 Vérification agent: {agent.user.username}")
+            
             if not bureau or not bureau.latitude_centre or not bureau.longitude_centre:
+                logger.info(f"❌ Bureau manquant ou coordonnées manquantes pour {agent.user.username}")
                 continue
             
             # Récupérer la dernière position de l'agent
@@ -58,7 +61,10 @@ def check_agent_exits():
             ).order_by('-timestamp').first()
             
             if not last_location:
+                logger.info(f"❌ Aucune position trouvée pour {agent.user.username}")
                 continue
+            
+            logger.info(f"📍 Dernière position: {last_location.latitude}, {last_location.longitude} à {last_location.timestamp}")
             
             # Calculer la distance par rapport au bureau
             distance = calculate_distance(
@@ -68,8 +74,11 @@ def check_agent_exits():
                 float(bureau.longitude_centre)
             )
             
+            logger.info(f"📏 Distance calculée: {distance:.1f}m du bureau")
+            
             # Si l'agent est à plus de 200m
             if distance > 200:
+                logger.info(f"⚠️ Agent éloigné: {distance:.1f}m > 200m")
                 # Vérifier depuis combien de temps il est loin
                 locations_away = AgentLocation.objects.filter(
                     agent=agent.user,  # AgentLocation utilise User, pas Agent
