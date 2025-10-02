@@ -86,11 +86,14 @@ def check_agent_exits():
                     timestamp__gte=now - timedelta(hours=1)
                 ).order_by('timestamp')
                 
+                logger.info(f"🕐 Positions des 60 dernières minutes: {locations_away.count()}")
+                
                 # Vérifier si toutes les positions des 60 dernières minutes sont > 200m
                 all_away = True
                 first_away_time = None
                 
                 for loc in locations_away:
+                    logger.info(f"   📍 {loc.timestamp.strftime('%H:%M')} - Lat: {loc.latitude}, Lon: {loc.longitude}")
                     loc_distance = calculate_distance(
                         float(loc.latitude),
                         float(loc.longitude),
@@ -98,14 +101,26 @@ def check_agent_exits():
                         float(bureau.longitude_centre)
                     )
                     
+                    logger.info(f"      Distance: {loc_distance:.1f}m")
+                    
                     if loc_distance <= 200:
+                        logger.info(f"      ✅ Position proche trouvée, agent pas toujours loin")
                         all_away = False
                         break
                     elif first_away_time is None:
                         first_away_time = loc.timestamp
+                        logger.info(f"      🕐 Première position loin: {first_away_time.strftime('%H:%M')}")
+                
+                logger.info(f"🔍 Résultat vérification:")
+                logger.info(f"   all_away: {all_away}")
+                logger.info(f"   first_away_time: {first_away_time}")
+                if first_away_time:
+                    duration = now - first_away_time
+                    logger.info(f"   Durée d'absence: {duration.total_seconds()/60:.1f} minutes")
                 
                 # Si l'agent est loin depuis plus d'une heure
                 if all_away and first_away_time and (now - first_away_time) >= timedelta(hours=1):
+                    logger.info(f"🚨 SORTIE DÉTECTÉE ! Agent loin depuis plus d'1h")
                     # Calculer l'heure de sortie (maintenant - 1 heure)
                     heure_sortie = (now - timedelta(hours=1)).time()
                     
