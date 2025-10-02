@@ -126,8 +126,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'diligence',#
         'USER': os.environ.get('DB_USER', 'root'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'root'),
-        #'PASSWORD': os.environ.get('DB_PASSWORD', 'xamil@IFE2025'),
+        #'PASSWORD': os.environ.get('DB_PASSWORD', 'root'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'xamil@IFE2025'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '3306'),
         'OPTIONS': {
