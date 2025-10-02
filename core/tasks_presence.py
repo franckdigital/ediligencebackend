@@ -169,15 +169,10 @@ def check_agent_exits():
                     for superieur in superieurs:
                         Notification.objects.create(
                             user=superieur,
-                            type='sortie_detectee',
-                            title='Sortie automatique détectée',
-                            message=f"{agent.nom} {agent.prenom} s'est éloigné du bureau (distance: {distance:.1f}m) depuis plus d'une heure. Sortie marquée à {heure_sortie.strftime('%H:%M')}.",
-                            data={
-                                'agent_id': agent.id,
-                                'presence_id': presence.id,
-                                'distance': distance,
-                                'heure_sortie': heure_sortie.strftime('%H:%M')
-                            }
+                            type_notif='rappel',  # Utiliser un type existant
+                            contenu=f"Sortie automatique détectée: {agent.nom} {agent.prenom} s'est éloigné du bureau (distance: {distance:.1f}m) depuis plus d'une heure. Sortie marquée à {heure_sortie.strftime('%H:%M')}.",
+                            message=f"Sortie automatique: {agent.nom} {agent.prenom}",
+                            lien=f"/presences"
                         )
                     
                     logger.info(f"📧 Notifications envoyées à {superieurs.count()} supérieurs")
