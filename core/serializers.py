@@ -435,14 +435,24 @@ class DirectionSerializer(serializers.ModelSerializer):
         fields = ['id', 'nom', 'description', 'nombre_services', 'services', 'created_at', 'updated_at']
 
     def get_nombre_services(self, obj):
-        return obj.services.count()
+        # Utiliser la propriété du modèle qui gère le try/except
+        return obj.nombre_services
 
     def get_services(self, obj):
-        return [{
-            'id': service.id,
-            'nom': service.nom,
-            'description': service.description
-        } for service in obj.services.all()]
+        # Récupérer les services via les sous-directions
+        try:
+            services = []
+            for sous_direction in obj.sous_directions.all():
+                for service in sous_direction.services.all():
+                    services.append({
+                        'id': service.id,
+                        'nom': service.nom,
+                        'description': service.description
+                    })
+            return services
+        except:
+            # Fallback pour compatibilité
+            return []
 
 class SousDirectionSerializer(serializers.ModelSerializer):
     direction_nom = serializers.CharField(source='direction.nom', read_only=True)
