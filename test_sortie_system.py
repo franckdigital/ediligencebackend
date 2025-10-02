@@ -140,6 +140,10 @@ def simulate_agent_movement(agent, bureau):
         }
     ]
     
+    # Nettoyer les anciennes positions de test
+    AgentLocation.objects.filter(agent=agent.user).delete()
+    print("🧹 Anciennes positions supprimées")
+    
     print("\n📍 Création des positions de l'agent:")
     for pos in positions:
         timestamp = current_time + timedelta(minutes=pos['time_offset'])
