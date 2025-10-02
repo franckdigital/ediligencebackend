@@ -15,7 +15,8 @@ app = Celery('ediligence')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Découvrir automatiquement les tâches dans les applications Django
-app.autodiscover_tasks(['core'])
+# Celery cherche automatiquement un fichier tasks.py dans chaque app
+app.autodiscover_tasks()
 
 # Configuration du scheduler Beat
 app.conf.beat_schedule = {
