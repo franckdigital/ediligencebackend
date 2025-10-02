@@ -120,7 +120,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'ediligence.wsgi.application'
 
-# Database
+### Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',

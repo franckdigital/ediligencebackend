@@ -1156,6 +1156,50 @@ class SimplePresenceView(APIView):
             logger.error(f'[SimplePresenceView] Erreur: {str(e)}')
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class UpdatePresenceStatusView(APIView):
+    """API pour que les supérieurs modifient le statut des présences"""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication, TokenAuthentication]
+
+    def patch(self, request, presence_id):
+        try:
+            presence = Presence.objects.get(id=presence_id)
+            new_status = request.data.get('statut')
+            
+            if new_status not in ['présent', 'absent']:
+                return Response({'error': 'Statut invalide'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Vérifier que l'utilisateur a le droit de modifier (supérieur hiérarchique)
+            user_profile = request.user.profile
+            if user_profile.role not in ['ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE']:
+                return Response({'error': 'Permissions insuffisantes'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Mettre à jour le statut
+            presence.statut = new_status
+            presence.statut_modifiable = True
+            
+            # Si on remet présent, on réactive la possibilité de pointer départ
+            if new_status == 'présent':
+                presence.sortie_detectee = False
+                presence.heure_sortie = None
+                presence.temps_absence_minutes = None
+            
+            presence.save()
+            
+            logger.info(f'[UpdatePresenceStatus] Statut modifié par {request.user.username}: {presence.agent.username} -> {new_status}')
+            
+            return Response({
+                'message': f'Statut mis à jour: {new_status}',
+                'presence_id': presence.id,
+                'nouveau_statut': new_status
+            })
+            
+        except Presence.DoesNotExist:
+            return Response({'error': 'Présence non trouvée'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f'[UpdatePresenceStatus] Erreur: {str(e)}')
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer

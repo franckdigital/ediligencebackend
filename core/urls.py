@@ -22,7 +22,7 @@ from .views import (
     DiligenceDownloadFichierView, ImputationFileViewSet, MaPresenceDuJourView,
     CustomTokenObtainPairView, ImputationAccessViewSet, UserDiligenceCommentViewSet,
     UserDiligenceInstructionViewSet, DemandeCongeViewSet, DemandeAbsenceViewSet,
-    CourrierImputationViewSet, SimplePresenceView
+    CourrierImputationViewSet, SimplePresenceView, UpdatePresenceStatusView
 )
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
@@ -84,6 +84,7 @@ urlpatterns = [
     path('presence/ma-presence-du-jour/', MaPresenceDuJourView.as_view(), name='ma-presence-du-jour'),
     # Fingerprint endpoints removed - using simple button presence now
     path('presence/simple/', SimplePresenceView.as_view(), name='simple-presence'),
+    path('presence/<int:presence_id>/update-status/', UpdatePresenceStatusView.as_view(), name='update-presence-status'),
     path('stats/presence/', PresenceStatsAPIView.as_view(), name='presence-stats'),
     path('', include(router.urls)),
     path('auth/register/', AgentRegistrationView.as_view(), name='register'),

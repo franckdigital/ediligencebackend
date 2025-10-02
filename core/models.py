@@ -81,18 +81,18 @@ class Service(models.Model):
 import secrets
 
 import secrets
-
 class UserProfile(models.Model):
     empreinte_hash = models.CharField(max_length=255, blank=True, null=True, help_text="Hash de l'empreinte digitale de l'utilisateur")
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),
         ('DIRECTEUR', 'Directeur'),  # Peut voir toutes les diligences de sa direction
+        ('SOUS_DIRECTEUR', 'Sous-Directeur'),  # Peut gérer les présences de sa direction
+        ('CHEF_SERVICE', 'Chef de Service'),  # Peut gérer les présences de son service
         ('SUPERIEUR', 'Superieur'),  # Peut voir les diligences de son service
-        ('AGENT', 'Agent'),          # Peut voir ses propres diligences
-        ('SECRETAIRE', 'Secretaire'),# Peut voir les diligences de son service
-        ('PRESTATAIRE', 'Prestataire'),
+        ('AGENT', 'Agent'),  # Peut voir et créer ses propres diligences
+        ('SECRETAIRE', 'Secretaire'),  # Peut voir et créer des diligences
+        ('PRESTATAIRE', 'Prestataire'),  # Peut voir les diligences qui lui sont assignées
     ]
-    
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     matricule = models.CharField(max_length=64, blank=True, null=True)
     telephone = models.CharField(max_length=32, unique=True, blank=True, null=True)
@@ -715,6 +715,13 @@ class Presence(models.Model):
     localisation_valide = models.BooleanField(default=False)
     device_fingerprint = models.CharField(max_length=64, null=True, blank=True, help_text="Empreinte unique du téléphone")
     commentaire = models.TextField(null=True, blank=True)
+    
+    # Nouveaux champs pour le suivi des sorties
+    heure_sortie = models.TimeField(null=True, blank=True, help_text="Heure de sortie automatique (éloignement > 200m)")
+    sortie_detectee = models.BooleanField(default=False, help_text="Sortie détectée par géolocalisation")
+    temps_absence_minutes = models.IntegerField(null=True, blank=True, help_text="Durée d'absence en minutes")
+    statut_modifiable = models.BooleanField(default=True, help_text="Le statut peut être modifié par le supérieur")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -755,6 +762,8 @@ class RolePermission(models.Model):
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),
         ('DIRECTEUR', 'Directeur'),
+        ('SOUS_DIRECTEUR', 'Sous-Directeur'),
+        ('CHEF_SERVICE', 'Chef de Service'),
         ('SUPERIEUR', 'Superieur'),
         ('AGENT', 'Agent'),
         ('SECRETAIRE', 'Secretaire'),
