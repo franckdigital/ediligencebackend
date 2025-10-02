@@ -8,7 +8,7 @@ import django.utils.timezone
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0032_add_new_roles'),
+        ('core', '0031_add_sortie_fields'),
     ]
 
     operations = [

@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0031_add_sortie_fields'),
+        ('core', '0033_alter_service_options_alter_service_direction_and_more'),
     ]
 
     operations = [
