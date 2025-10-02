@@ -8,7 +8,7 @@ import django.utils.timezone
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0030_alter_pushnotificationtoken_token'),
+        ('core', '0030_update_roles_final'),
     ]
 
     operations = [
