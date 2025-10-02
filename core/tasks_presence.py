@@ -154,7 +154,8 @@ def check_agent_exits():
                     presence.commentaire = f"Sortie automatique détectée - Distance: {distance:.1f}m du bureau"
                     presence.save()
                     
-                    logger.info(f"🚨 Sortie détectée: {agent.username} - Distance: {distance:.1f}m - Heure sortie: {heure_sortie}")
+                    agent_name = agent.user.username if hasattr(agent, 'user') else f"{agent.nom} {agent.prenom}"
+                    logger.info(f"🚨 Sortie détectée: {agent_name} - Distance: {distance:.1f}m - Heure sortie: {heure_sortie}")
                     
                     # Créer une notification pour les supérieurs
                     from .models import Notification
@@ -182,7 +183,8 @@ def check_agent_exits():
                     logger.info(f"📧 Notifications envoyées à {superieurs.count()} supérieurs")
         
         except Exception as e:
-            logger.error(f"❌ Erreur lors de la vérification pour {presence.agent.username}: {e}")
+            agent_name = presence.agent.user.username if hasattr(presence.agent, 'user') else str(presence.agent)
+            logger.error(f"❌ Erreur lors de la vérification pour {agent_name}: {e}")
     
     logger.info("✅ Vérification des sorties terminée")
 
