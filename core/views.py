@@ -1223,7 +1223,9 @@ class UpdatePresenceStatusView(APIView):
             
             presence.save()
             
-            logger.info(f'[UpdatePresenceStatus] Statut modifié par {request.user.username}: {presence.agent.username} -> {new_status}')
+            # Obtenir le nom de l'agent correctement
+            agent_name = presence.agent.user.username if hasattr(presence.agent, 'user') else str(presence.agent)
+            logger.info(f'[UpdatePresenceStatus] Statut modifié par {request.user.username}: {agent_name} -> {new_status}')
             
             return Response({
                 'message': f'Statut mis à jour: {new_status}',
