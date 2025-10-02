@@ -94,7 +94,7 @@ def simulate_agent_movement(agent, bureau):
     else:
         print(f"📅 Présence existante pour {agent.nom}")
     
-    # Simuler des positions de l'agent - SEULEMENT DES POSITIONS ÉLOIGNÉES
+    # Simuler des positions de l'agent - AVEC POSITION ANCIENNE POUR DÉCLENCHER LA DÉTECTION
     # Coordonnées du bureau : lat=5.396534, lon=-3.981554
     # Nous créons des positions éloignées avec des coordonnées complètement différentes
     positions = [
