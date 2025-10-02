@@ -16,7 +16,11 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Découvrir automatiquement les tâches dans les applications Django
 # Celery cherche automatiquement un fichier tasks.py dans chaque app
-app.autodiscover_tasks()
+def get_installed_apps():
+    from django.conf import settings
+    return settings.INSTALLED_APPS
+
+app.autodiscover_tasks(get_installed_apps)
 
 # Configuration du scheduler Beat
 app.conf.beat_schedule = {
