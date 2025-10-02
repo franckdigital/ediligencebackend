@@ -101,30 +101,31 @@ def simulate_agent_movement(agent, bureau):
             'lat': float(bureau.latitude_centre),
             'lon': float(bureau.longitude_centre),
             'time_offset': -120,  # Il y a 2 heures
-            'description': 'Au bureau'
+            'description': 'Au bureau (hors fenêtre)'
         },
         # Position légèrement éloignée (50m) - il y a plus d'1h (hors fenêtre)
         {
             'lat': float(bureau.latitude_centre) + 0.0005,
             'lon': float(bureau.longitude_centre) + 0.0005,
             'time_offset': -90,  # Il y a 1h30
-            'description': 'Proche du bureau (50m)'
+            'description': 'Proche du bureau (hors fenêtre)'
         },
-        # Position éloignée (300m) - début de sortie (il y a 65 minutes = plus d'1h)
+        # Position éloignée (300m) - il y a 65 minutes (DÉBUT DE SORTIE - plus d'1h)
         {
             'lat': float(bureau.latitude_centre) + 0.003,
             'lon': float(bureau.longitude_centre) + 0.003,
             'time_offset': -65,  # Il y a 65 minutes (plus d'1h)
-            'description': 'Éloigné du bureau (300m) - début sortie'
+            'description': 'DÉBUT SORTIE - Éloigné (300m)'
         },
-        # Position éloignée (300m) - dans les 60 dernières minutes
+        # TOUTES LES POSITIONS SUIVANTES SONT ÉLOIGNÉES ET DANS LES 60 DERNIÈRES MINUTES
+        # Position éloignée (300m) - il y a 50 minutes
         {
             'lat': float(bureau.latitude_centre) + 0.003,
             'lon': float(bureau.longitude_centre) + 0.003,
             'time_offset': -50,  # Il y a 50 minutes
             'description': 'Éloigné du bureau (300m)'
         },
-        # Position très éloignée (500m) - sortie confirmée
+        # Position très éloignée (500m) - il y a 30 minutes
         {
             'lat': float(bureau.latitude_centre) + 0.005,
             'lon': float(bureau.longitude_centre) + 0.005,
