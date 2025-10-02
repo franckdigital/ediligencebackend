@@ -347,10 +347,11 @@ class PresenceSerializer(serializers.ModelSerializer):
         model = Presence
         fields = [
             'id', 'agent', 'agent_details', 'date_presence', 'heure_arrivee', 'heure_depart',
+            'heure_sortie', 'sortie_detectee', 'temps_absence_minutes', 'statut_modifiable',
             'statut', 'latitude', 'longitude', 'localisation_valide', 'device_fingerprint',
             'commentaire', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide', 'statut']
+        read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide']
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
