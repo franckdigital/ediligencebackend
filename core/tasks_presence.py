@@ -53,7 +53,7 @@ def check_agent_exits():
             
             # Récupérer la dernière position de l'agent
             last_location = AgentLocation.objects.filter(
-                agent=agent,
+                agent=agent.user,  # AgentLocation utilise User, pas Agent
                 timestamp__date=current_date
             ).order_by('-timestamp').first()
             
@@ -72,7 +72,7 @@ def check_agent_exits():
             if distance > 200:
                 # Vérifier depuis combien de temps il est loin
                 locations_away = AgentLocation.objects.filter(
-                    agent=agent,
+                    agent=agent.user,  # AgentLocation utilise User, pas Agent
                     timestamp__date=current_date,
                     timestamp__gte=now - timedelta(hours=1)
                 ).order_by('timestamp')

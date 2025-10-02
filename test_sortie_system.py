@@ -143,9 +143,9 @@ def simulate_agent_movement(agent, bureau):
             float(bureau.latitude_centre), float(bureau.longitude_centre)
         )
         
-        # Créer la position
+        # Créer la position (AgentLocation attend un User, pas un Agent)
         location = AgentLocation.objects.create(
-            agent=agent,
+            agent=agent.user,  # Utiliser agent.user au lieu de agent
             latitude=Decimal(str(pos['lat'])),
             longitude=Decimal(str(pos['lon'])),
             timestamp=timestamp
