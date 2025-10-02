@@ -96,39 +96,46 @@ def simulate_agent_movement(agent, bureau):
     
     # Simuler des positions de l'agent
     positions = [
-        # Position au bureau (0m)
+        # Position au bureau (0m) - il y a plus d'1h (hors fenêtre de détection)
         {
             'lat': float(bureau.latitude_centre),
             'lon': float(bureau.longitude_centre),
             'time_offset': -120,  # Il y a 2 heures
             'description': 'Au bureau'
         },
-        # Position légèrement éloignée (50m)
+        # Position légèrement éloignée (50m) - il y a plus d'1h (hors fenêtre)
         {
             'lat': float(bureau.latitude_centre) + 0.0005,
             'lon': float(bureau.longitude_centre) + 0.0005,
             'time_offset': -90,  # Il y a 1h30
             'description': 'Proche du bureau (50m)'
         },
-        # Position éloignée (300m) - début de sortie
+        # Position éloignée (300m) - début de sortie (il y a 65 minutes = plus d'1h)
         {
             'lat': float(bureau.latitude_centre) + 0.003,
             'lon': float(bureau.longitude_centre) + 0.003,
-            'time_offset': -70,  # Il y a 1h10
+            'time_offset': -65,  # Il y a 65 minutes (plus d'1h)
+            'description': 'Éloigné du bureau (300m) - début sortie'
+        },
+        # Position éloignée (300m) - dans les 60 dernières minutes
+        {
+            'lat': float(bureau.latitude_centre) + 0.003,
+            'lon': float(bureau.longitude_centre) + 0.003,
+            'time_offset': -50,  # Il y a 50 minutes
             'description': 'Éloigné du bureau (300m)'
         },
         # Position très éloignée (500m) - sortie confirmée
         {
             'lat': float(bureau.latitude_centre) + 0.005,
             'lon': float(bureau.longitude_centre) + 0.005,
-            'time_offset': -60,  # Il y a 1h
+            'time_offset': -30,  # Il y a 30 minutes
             'description': 'Très éloigné du bureau (500m)'
         },
         # Position actuelle - toujours éloigné
         {
             'lat': float(bureau.latitude_centre) + 0.005,
             'lon': float(bureau.longitude_centre) + 0.005,
-            'time_offset': 0,  # Maintenant
+            'time_offset': -10,  # Il y a 10 minutes
             'description': 'Position actuelle (500m)'
         }
     ]
