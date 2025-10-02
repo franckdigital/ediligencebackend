@@ -39,12 +39,19 @@ class Direction(models.Model):
     @property
     def nombre_sous_directions(self):
         """Retourne le nombre de sous-directions dans cette direction"""
-        return self.sous_directions.count()
+        try:
+            return self.sous_directions.count()
+        except:
+            return 0
     
     @property
     def nombre_services(self):
         """Retourne le nombre total de services dans cette direction (via les sous-directions)"""
-        return Service.objects.filter(sous_direction__direction=self).count()
+        try:
+            return Service.objects.filter(sous_direction__direction=self).count()
+        except:
+            # Fallback pour avant la migration vers sous-directions
+            return Service.objects.filter(direction=self).count()
 
     def save(self, *args, **kwargs):
         if not self.created_at:
