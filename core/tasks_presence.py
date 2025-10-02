@@ -80,19 +80,18 @@ def check_agent_exits():
             if distance > 200:
                 logger.info(f"⚠️ Agent éloigné: {distance:.1f}m > 200m")
                 # Vérifier depuis combien de temps il est loin
-                locations_away = AgentLocation.objects.filter(
+                locations_recent = AgentLocation.objects.filter(
                     agent=agent.user,  # AgentLocation utilise User, pas Agent
                     timestamp__date=current_date,
                     timestamp__gte=now - timedelta(hours=1)
                 ).order_by('timestamp')
                 
-                logger.info(f"🕐 Positions des 60 dernières minutes: {locations_away.count()}")
+                logger.info(f"🕐 Positions des 60 dernières minutes: {locations_recent.count()}")
                 
                 # Vérifier si toutes les positions des 60 dernières minutes sont > 200m
                 all_away = True
-                first_away_time = None
                 
-                for loc in locations_away:
+                for loc in locations_recent:
                     logger.info(f"   📍 {loc.timestamp.strftime('%H:%M')} - Lat: {loc.latitude}, Lon: {loc.longitude}")
                     loc_distance = calculate_distance(
                         float(loc.latitude),
@@ -107,9 +106,30 @@ def check_agent_exits():
                         logger.info(f"      ✅ Position proche trouvée, agent pas toujours loin")
                         all_away = False
                         break
-                    elif first_away_time is None:
-                        first_away_time = loc.timestamp
-                        logger.info(f"      🕐 Première position loin: {first_away_time.strftime('%H:%M')}")
+                
+                # Si toutes les positions récentes sont éloignées, chercher la VRAIE première position éloignée
+                first_away_time = None
+                if all_away:
+                    # Chercher toutes les positions du jour, triées par timestamp
+                    all_locations_today = AgentLocation.objects.filter(
+                        agent=agent.user,
+                        timestamp__date=current_date
+                    ).order_by('timestamp')
+                    
+                    logger.info(f"🔍 Recherche de la première position éloignée parmi {all_locations_today.count()} positions du jour")
+                    
+                    for loc in all_locations_today:
+                        loc_distance = calculate_distance(
+                            float(loc.latitude),
+                            float(loc.longitude),
+                            float(bureau.latitude_centre),
+                            float(bureau.longitude_centre)
+                        )
+                        
+                        if loc_distance > 200:
+                            first_away_time = loc.timestamp
+                            logger.info(f"      🎯 VRAIE première position éloignée: {first_away_time.strftime('%H:%M')} - Distance: {loc_distance:.1f}m")
+                            break
                 
                 logger.info(f"🔍 Résultat vérification:")
                 logger.info(f"   all_away: {all_away}")
