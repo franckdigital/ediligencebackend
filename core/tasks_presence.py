@@ -28,9 +28,11 @@ def check_agent_exits():
     work_start = time(7, 30)
     work_end = time(16, 30)
     
-    if not (work_start <= current_time <= work_end):
-        logger.info("⏰ Hors heures de travail, pas de vérification")
-        return
+    # TEMPORAIRE: Désactivé pour test
+    # if not (work_start <= current_time <= work_end):
+    #     logger.info("⏰ Hors heures de travail, pas de vérification")
+    #     return
+    logger.info(f"⏰ Heure actuelle: {current_time} (vérification des heures désactivée pour test)")
     
     # Récupérer toutes les présences du jour qui ne sont pas encore marquées comme sorties
     presences_today = Presence.objects.filter(
