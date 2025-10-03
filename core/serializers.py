@@ -704,6 +704,7 @@ class DiligenceSerializer(serializers.ModelSerializer):
     services_concernes_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     fichier_joint = serializers.FileField(required=False, allow_null=True, allow_empty_file=True)
     fichier_joint_url = serializers.SerializerMethodField()
+    courrier_fichier_url = serializers.SerializerMethodField()
 
     def create(self, validated_data):
         print('>>> DILIGENCE SERIALIZER CREATE APPELÉ <<<')
@@ -809,7 +810,7 @@ class DiligenceSerializer(serializers.ModelSerializer):
         model = Diligence
         fields = ['id', 'type_diligence', 'reference_courrier', 'agents', 'agents_ids', 'services_concernes', 
                  'services_concernes_ids', 'domaine', 'categorie', 'statut', 'pourcentage_avancement',
-                 'fichier_joint', 'fichier_joint_url', 'instructions', 'date_limite', 'date_rappel_1', 
+                 'fichier_joint', 'fichier_joint_url', 'courrier_fichier_url', 'instructions', 'date_limite', 'date_rappel_1', 
                  'date_rappel_2', 'commentaires', 'commentaires_agents', 'expediteur', 'objet', 'date_reception', 'created_at', 
                  'updated_at', 'courrier', 'courrier_id', 'direction', 'direction_details', 
                  'nouvelle_instruction', 'validated_at', 'validated_by', 'archived_at', 'archived_by']
@@ -817,6 +818,12 @@ class DiligenceSerializer(serializers.ModelSerializer):
     def get_fichier_joint_url(self, obj):
         if obj.fichier_joint:
             return obj.fichier_joint.url
+        return None
+    
+    def get_courrier_fichier_url(self, obj):
+        """Retourne l'URL du fichier joint du courrier lié"""
+        if obj.courrier and obj.courrier.fichier_joint:
+            return obj.courrier.fichier_joint.url
         return None
 
     def _process_list_field(self, value):
