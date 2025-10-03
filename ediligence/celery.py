@@ -29,6 +29,10 @@ app.conf.beat_schedule = {
         'schedule': 300.0,  # 5 minutes en secondes
         'options': {'expires': 290.0}  # Expire avant la prochaine exécution
     },
+    'auto-close-forgotten-departures-at-17h': {
+        'task': 'core.tasks_presence.auto_close_forgotten_departures',
+        'schedule': crontab(hour=17, minute=0),  # Tous les jours à 17h00
+    },
 }
 
 # Configuration du timezone

@@ -24,15 +24,21 @@ def check_agent_exits():
     current_time = now.time()
     current_date = now.date()
     
-    # Vérifier seulement pendant les heures de travail (7h30-16h30)
-    work_start = time(7, 30)
-    work_end = time(16, 30)
+    # Vérifier seulement pendant les heures de travail (7h30-12h30 et 13h30-16h30)
+    morning_start = time(7, 30)
+    morning_end = time(12, 30)
+    afternoon_start = time(13, 30)
+    afternoon_end = time(16, 30)
     
-    # TEMPORAIRE: Désactivé pour test
-    # if not (work_start <= current_time <= work_end):
-    #     logger.info("⏰ Hors heures de travail, pas de vérification")
-    #     return
-    logger.info(f"⏰ Heure actuelle: {current_time} (vérification des heures désactivée pour test)")
+    # Vérifier si on est dans les heures de travail (matin ou après-midi)
+    is_morning = morning_start <= current_time <= morning_end
+    is_afternoon = afternoon_start <= current_time <= afternoon_end
+    
+    if not (is_morning or is_afternoon):
+        logger.info("⏰ Hors heures de travail (pause déjeuner ou hors horaires), pas de vérification")
+        return
+    
+    logger.info(f"⏰ Heure actuelle: {current_time} - Vérification en cours")
     
     # Récupérer toutes les présences du jour qui ne sont pas encore marquées comme sorties
     presences_today = Presence.objects.filter(
@@ -182,6 +188,84 @@ def check_agent_exits():
             logger.error(f"❌ Erreur lors de la vérification pour {agent_name}: {e}")
     
     logger.info("✅ Vérification des sorties terminée")
+
+@shared_task
+def auto_close_forgotten_departures():
+    """
+    Fermer automatiquement les présences dont le départ n'a pas été pointé
+    après la fin de la journée de travail (16h30)
+    Cette tâche s'exécute à 17h00 pour marquer les départs oubliés à 16h30
+    """
+    logger.info("🔚 Vérification des départs oubliés...")
+    
+    now = timezone.now()
+    current_date = now.date()
+    current_time = now.time()
+    
+    # Ne s'exécuter qu'après 17h00
+    if current_time < time(17, 0):
+        logger.info("⏰ Trop tôt pour fermer les présences (avant 17h)")
+        return
+    
+    # Récupérer les présences sans départ pointé
+    presences_without_departure = Presence.objects.filter(
+        date_presence=current_date,
+        heure_arrivee__isnull=False,  # A pointé l'arrivée
+        heure_depart__isnull=True,    # N'a pas pointé le départ
+        sortie_detectee=False          # Pas de sortie automatique détectée
+    )
+    
+    logger.info(f"📊 {presences_without_departure.count()} présences sans départ pointé")
+    
+    for presence in presences_without_departure:
+        try:
+            agent = presence.agent
+            bureau = agent.bureau
+            
+            # Essayer de détecter l'heure réelle de départ via GPS
+            detected_departure_time = None
+            
+            if bureau and bureau.latitude_centre and bureau.longitude_centre:
+                # Récupérer toutes les positions de l'agent aujourd'hui après 16h30
+                positions_after_work = AgentLocation.objects.filter(
+                    agent=agent.user,
+                    timestamp__date=current_date,
+                    timestamp__time__gte=time(16, 30)
+                ).order_by('timestamp')
+                
+                # Chercher la première position où l'agent s'est éloigné du bureau (>200m)
+                for location in positions_after_work:
+                    distance = calculate_distance(
+                        float(location.latitude),
+                        float(location.longitude),
+                        float(bureau.latitude_centre),
+                        float(bureau.longitude_centre)
+                    )
+                    
+                    if distance > 200:
+                        # Première position éloignée = heure de départ
+                        detected_departure_time = location.timestamp.time()
+                        logger.info(f"📍 Départ détecté via GPS à {detected_departure_time} (distance: {distance:.1f}m)")
+                        break
+            
+            # Si on a détecté l'heure via GPS, l'utiliser, sinon 16h30 par défaut
+            if detected_departure_time:
+                presence.heure_depart = detected_departure_time
+                presence.commentaire = f"{presence.commentaire or ''} | Départ détecté automatiquement via GPS".strip()
+            else:
+                presence.heure_depart = time(16, 30)
+                presence.commentaire = f"{presence.commentaire or ''} | Départ automatique à 16h30 (non pointé, pas de données GPS)".strip()
+            
+            presence.save()
+            
+            agent_name = presence.agent.user.username if hasattr(presence.agent, 'user') else str(presence.agent)
+            logger.info(f"✅ Départ automatique marqué pour {agent_name} à {presence.heure_depart}")
+            
+        except Exception as e:
+            agent_name = presence.agent.user.username if hasattr(presence.agent, 'user') else str(presence.agent)
+            logger.error(f"❌ Erreur lors de la fermeture pour {agent_name}: {e}")
+    
+    logger.info("✅ Fermeture automatique des présences terminée")
 
 @shared_task
 def update_presence_departure_status():
