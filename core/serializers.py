@@ -823,6 +823,9 @@ class DiligenceSerializer(serializers.ModelSerializer):
     def get_courrier_fichier_url(self, obj):
         """Retourne l'URL du fichier joint du courrier lié"""
         if obj.courrier and obj.courrier.fichier_joint:
+            request = self.context.get('request')
+            if request and hasattr(obj.courrier.fichier_joint, 'url'):
+                return request.build_absolute_uri(obj.courrier.fichier_joint.url)
             return obj.courrier.fichier_joint.url
         return None
 
