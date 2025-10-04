@@ -33,7 +33,7 @@ from .models import Direction, SousDirection, Service, Diligence, Courrier, User
 from .serializers import (
     CourrierSerializer, ServiceSerializer, DirectionSerializer, SousDirectionSerializer,
     DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
-    UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer,
+    UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer, OccurrenceSpecialeSerializer,
     ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
     BureauSerializer, CourrierImputationSerializer, PresenceSerializer, RolePermissionSerializer
 )
@@ -1238,6 +1238,24 @@ class UpdatePresenceStatusView(APIView):
         except Exception as e:
             logger.error(f'[UpdatePresenceStatus] Erreur: {str(e)}')
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class OccurrenceSpecialeViewSet(viewsets.ModelViewSet):
+    queryset = OccurrenceSpeciale.objects.all()
+    serializer_class = OccurrenceSpecialeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def get_queryset(self):
+        """Filtrer les occurrences selon le rôle de l'utilisateur"""
+        user = self.request.user
+        
+        # Les supérieurs peuvent voir toutes les occurrences de leur service/direction
+        if hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE']:
+            return OccurrenceSpeciale.objects.all()
+        
+        # Les agents voient seulement leurs propres occurrences
+        return OccurrenceSpeciale.objects.filter(agent=user)
+
 
 class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()

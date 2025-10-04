@@ -41,6 +41,7 @@ router.register(r'bureaux', BureauViewSet)
 
 router.register(r'role-permissions', RolePermissionViewSet, basename='role-permissions')
 router.register(r'presences', PresenceViewSet, basename='presences')
+router.register(r'occurrences-speciales', OccurrenceSpecialeViewSet, basename='occurrences-speciales')
 
 # --- ROUTES GESTION D'ACTIVITE ---
 router.register(r'activites', ActiviteViewSet)

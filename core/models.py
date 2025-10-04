@@ -802,6 +802,50 @@ class Presence(models.Model):
         return f"{self.agent.username} - {self.date_presence} ({self.statut})"
 
 
+class OccurrenceSpeciale(models.Model):
+    """Modèle pour gérer les occurrences spéciales (représentations, missions, permissions, etc.)"""
+    TYPE_CHOICES = [
+        ('REP1', 'Représentation demi-journée'),
+        ('REP2', 'Représentation journée entière'),
+        ('M1', 'Mission à l\'intérieur'),
+        ('M2', 'Mission à l\'extérieur'),
+        ('C', 'Congé'),
+        ('T', 'Télétravail'),
+        ('F', 'Férié'),
+        ('P1', 'Permission demi-journée'),
+        ('P2', 'Permission journée entière'),
+        ('ABS', 'Absence non justifiée'),
+    ]
+    
+    STATUT_CHOICES = [
+        ('permission', 'Permission'),
+        ('en mission', 'En mission'),
+        ('congé', 'Congé'),
+        ('télétravail', 'Télétravail'),
+        ('férié', 'Férié'),
+        ('absent', 'Absent'),
+    ]
+    
+    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='occurrences_speciales')
+    type_occurrence = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    nom_occurrence = models.CharField(max_length=100)
+    statut = models.CharField(max_length=32, choices=STATUT_CHOICES)
+    date = models.DateField()
+    heure_debut = models.TimeField(null=True, blank=True, help_text="Heure de début (pour demi-journée)")
+    heure_fin = models.TimeField(null=True, blank=True, help_text="Heure de fin (pour demi-journée)")
+    createur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='occurrences_creees')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Occurrence spéciale'
+        verbose_name_plural = 'Occurrences spéciales'
+        ordering = ['-date', '-created_at']
+    
+    def __str__(self):
+        return f"{self.agent.username} - {self.nom_occurrence} - {self.date}"
+
+
 class DeviceRegistration(models.Model):
     """Modèle pour enregistrer les appareils autorisés par utilisateur"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registered_devices')

@@ -14,7 +14,8 @@ from core.models import (
     Notification, Observation, EtapeEvenement, Prestataire, 
     PrestataireEtape, Evaluation, DiligenceDocument, ImputationAccess,
     Fichier, Commentaire, Tache, Activite, Domaine, Projet,
-    GeofenceAlert, GeofenceSettings, AgentLocation, PushNotificationToken
+    GeofenceAlert, GeofenceSettings, AgentLocation, PushNotificationToken,
+    OccurrenceSpeciale
 )
 
 class ImputationFileSerializer(serializers.ModelSerializer):
@@ -352,6 +353,32 @@ class PresenceSerializer(serializers.ModelSerializer):
             'commentaire', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide']
+
+class OccurrenceSpecialeSerializer(serializers.ModelSerializer):
+    agent_details = UserSerializer(source='agent', read_only=True)
+    createur_details = UserSerializer(source='createur', read_only=True)
+    agent_id = serializers.IntegerField(write_only=True)
+    createur_id = serializers.IntegerField(write_only=True, required=False)
+    
+    class Meta:
+        model = OccurrenceSpeciale
+        fields = [
+            'id', 'agent', 'agent_id', 'agent_details', 'type_occurrence', 'nom_occurrence',
+            'statut', 'date', 'heure_debut', 'heure_fin', 'createur', 'createur_id',
+            'createur_details', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'agent', 'createur', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        agent_id = validated_data.pop('agent_id')
+        createur_id = validated_data.pop('createur_id', None)
+        
+        validated_data['agent_id'] = agent_id
+        if createur_id:
+            validated_data['createur_id'] = createur_id
+        
+        return super().create(validated_data)
+
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
