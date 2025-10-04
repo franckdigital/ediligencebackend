@@ -29,7 +29,7 @@ from rest_framework.exceptions import PermissionDenied
 from .pdf_utils import generate_conge_pdf, generate_absence_pdf, create_pdf_response
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
-from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence
+from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence, OccurrenceSpeciale
 from .serializers import (
     CourrierSerializer, ServiceSerializer, DirectionSerializer, SousDirectionSerializer,
     DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
