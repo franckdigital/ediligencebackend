@@ -84,19 +84,23 @@ def check_agent_exits():
             
             logger.info(f"📏 Distance calculée: {distance:.1f}m du bureau")
             
-            # Si l'agent est à plus de 200m
-            if distance > 200:
-                logger.info(f"⚠️ Agent éloigné: {distance:.1f}m > 200m")
+            # MODE TEST: Si l'agent est à plus de 1m (au lieu de 200m)
+            TEST_MODE = True  # Mettre à False pour revenir au mode normal
+            distance_threshold = 1 if TEST_MODE else 200
+            time_threshold = timedelta(minutes=1) if TEST_MODE else timedelta(hours=1)
+            
+            if distance > distance_threshold:
+                logger.info(f"⚠️ Agent éloigné: {distance:.1f}m > {distance_threshold}m")
                 # Vérifier depuis combien de temps il est loin
                 locations_recent = AgentLocation.objects.filter(
                     agent=agent.user,  # AgentLocation utilise User, pas Agent
                     timestamp__date=current_date,
-                    timestamp__gte=now - timedelta(hours=1)
+                    timestamp__gte=now - time_threshold
                 ).order_by('timestamp')
                 
-                logger.info(f"🕐 Positions des 60 dernières minutes: {locations_recent.count()}")
+                logger.info(f"🕐 Positions récentes: {locations_recent.count()}")
                 
-                # Vérifier si toutes les positions des 60 dernières minutes sont > 200m
+                # Vérifier si toutes les positions récentes sont éloignées
                 all_away = True
                 
                 for loc in locations_recent:
@@ -110,7 +114,7 @@ def check_agent_exits():
                     
                     logger.info(f"      Distance: {loc_distance:.1f}m")
                     
-                    if loc_distance <= 200:
+                    if loc_distance <= distance_threshold:
                         logger.info(f"      ✅ Position proche trouvée, agent pas toujours loin")
                         all_away = False
                         break
@@ -134,7 +138,7 @@ def check_agent_exits():
                             float(bureau.longitude_centre)
                         )
                         
-                        if loc_distance > 200:
+                        if loc_distance > distance_threshold:
                             first_away_time = loc.timestamp
                             logger.info(f"      🎯 VRAIE première position éloignée: {first_away_time.strftime('%H:%M')} - Distance: {loc_distance:.1f}m")
                             break
@@ -146,18 +150,19 @@ def check_agent_exits():
                     duration = now - first_away_time
                     logger.info(f"   Durée d'absence: {duration.total_seconds()/60:.1f} minutes")
                 
-                # Si l'agent est loin depuis plus d'une heure
-                if all_away and first_away_time and (now - first_away_time) >= timedelta(hours=1):
-                    logger.info(f"🚨 SORTIE DÉTECTÉE ! Agent loin depuis plus d'1h")
-                    # Calculer l'heure de sortie (maintenant - 1 heure)
-                    heure_sortie = (now - timedelta(hours=1)).time()
+                # Si l'agent est loin depuis le temps défini (1 minute en mode test, 1 heure en mode normal)
+                if all_away and first_away_time and (now - first_away_time) >= time_threshold:
+                    duration_minutes = int((now - first_away_time).total_seconds() / 60)
+                    logger.info(f"🚨 SORTIE DÉTECTÉE ! Agent loin depuis {duration_minutes} minutes")
+                    # Calculer l'heure de sortie (première position éloignée)
+                    heure_sortie = first_away_time.time()
                     
                     # Marquer la sortie automatique
                     presence.heure_sortie = heure_sortie
                     presence.sortie_detectee = True
                     presence.statut = 'absent'
-                    presence.temps_absence_minutes = int((now - (now - timedelta(hours=1))).total_seconds() / 60)
-                    presence.commentaire = f"Sortie automatique détectée - Distance: {distance:.1f}m du bureau"
+                    presence.temps_absence_minutes = duration_minutes
+                    presence.commentaire = f"Sortie automatique détectée - Distance: {distance:.1f}m du bureau (MODE TEST: {distance_threshold}m, {int(time_threshold.total_seconds()/60)}min)"
                     presence.save()
                     
                     agent_name = agent.user.username if hasattr(agent, 'user') else f"{agent.nom} {agent.prenom}"
