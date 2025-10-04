@@ -440,7 +440,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         # Créer aussi un profil Agent si le rôle est AGENT
         if role == 'AGENT':
-            from .models import Agent
+            from .models import Agent, Bureau
+            
+            # Récupérer le bureau principal (ou le premier bureau disponible)
+            bureau_principal = Bureau.objects.first()
+            
             agent, agent_created = Agent.objects.get_or_create(
                 user=user,
                 defaults={
@@ -448,7 +452,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                     'prenom': user.first_name or '',
                     'matricule': matricule or '',
                     'poste': 'AGENT',
-                    'service': service
+                    'service': service,
+                    'bureau': bureau_principal  # Assigner automatiquement le bureau
                 }
             )
 
