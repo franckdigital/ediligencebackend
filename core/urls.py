@@ -16,6 +16,7 @@ from .views_ import UserManagementViewSet, NotificationViewSet, UserRegistration
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
 from .geofencing_views import GeofenceAlertViewSet, GeofenceSettingsViewSet, AgentLocationViewSet, PushNotificationTokenViewSet
+from .device_locking_views import CheckDeviceLockView, LockDeviceView, UnlockDeviceView
 from django.urls import path, include
 from core.views_stats import PresenceStatsAPIView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
@@ -82,6 +83,9 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/me/', UserProfileView.as_view(), name='user_profile'),
     path('auth/change-password/', ChangePasswordView.as_view(), name='change_password'),
+    path('auth/check-device-lock/', CheckDeviceLockView.as_view(), name='check_device_lock'),
+    path('auth/lock-device/', LockDeviceView.as_view(), name='lock_device'),
+    path('auth/unlock-device/', UnlockDeviceView.as_view(), name='unlock_device'),
     path('diligences/<int:pk>/download-fichier/', DiligenceDownloadFichierView.as_view(), name='diligence-download-fichier'),
     path('taches/<int:pk>/commentaires/',
          __import__('core.task_views').task_views.tache_commentaires,

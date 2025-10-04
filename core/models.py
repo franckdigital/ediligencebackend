@@ -1222,6 +1222,24 @@ class AgentLocation(models.Model):
         return f"{self.agent.username} - {self.timestamp.strftime('%d/%m/%Y %H:%M:%S')}"
 
 
+class DeviceLock(models.Model):
+    """Modèle pour verrouiller un appareil à un utilisateur"""
+    device_id = models.CharField(max_length=255, unique=True, db_index=True, help_text="Empreinte unique de l'appareil")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='locked_devices')
+    username = models.CharField(max_length=150)
+    email = models.EmailField()
+    locked_at = models.DateTimeField(auto_now_add=True)
+    last_used = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'device_locks'
+        verbose_name = 'Device Lock'
+        verbose_name_plural = 'Device Locks'
+    
+    def __str__(self):
+        return f"{self.device_id} → {self.username}"
+
+
 class PushNotificationToken(models.Model):
     """Modèle pour stocker les tokens de notification push des utilisateurs"""
     PLATFORM_CHOICES = [
