@@ -9,7 +9,7 @@ from .views import (
     UserDiligenceCommentViewSet, UserDiligenceInstructionViewSet,
     DemandeCongeViewSet, DemandeAbsenceViewSet, UpdatePresenceStatusView, DeleteUserView,
     CustomTokenObtainPairView, MaPresenceDuJourView, SimplePresenceView, AgentRegistrationView,
-    DiligenceDownloadFichierView
+    DiligenceDownloadFichierView, OccurrenceSpecialeViewSet
 )
 from .views_courrier_access import CourrierAccessViewSet
 from .views_ import UserManagementViewSet, NotificationViewSet, UserRegistrationView
