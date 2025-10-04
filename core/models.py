@@ -723,8 +723,8 @@ from django.core.exceptions import ValidationError
 
 class Bureau(models.Model):
     nom = models.CharField(max_length=255, unique=True, help_text="Nom ou référence du bureau")
-    latitude_centre = models.DecimalField(max_digits=22, decimal_places=17, help_text="Latitude du centre du bureau")
-    longitude_centre = models.DecimalField(max_digits=22, decimal_places=17, help_text="Longitude du centre du bureau")
+    latitude_centre = models.DecimalField(max_digits=10, decimal_places=7, help_text="Latitude du centre du bureau")
+    longitude_centre = models.DecimalField(max_digits=10, decimal_places=7, help_text="Longitude du centre du bureau")
     rayon_metres = models.IntegerField(help_text="Rayon de la zone autorisée en mètres")
 
     def clean(self):
