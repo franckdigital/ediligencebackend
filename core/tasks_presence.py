@@ -84,10 +84,10 @@ def check_agent_exits():
             
             logger.info(f"📏 Distance calculée: {distance:.1f}m du bureau")
             
-            # MODE TEST: Si l'agent est à plus de 50m et plus d'1 minute
+            # MODE TEST: Si l'agent est à plus de 200m et plus de 5 minutes
             TEST_MODE = True  # Mettre à False pour revenir au mode normal
-            distance_threshold = 50 if TEST_MODE else 200
-            time_threshold = timedelta(minutes=1) if TEST_MODE else timedelta(hours=1)
+            distance_threshold = 200 if TEST_MODE else 200
+            time_threshold = timedelta(minutes=5) if TEST_MODE else timedelta(hours=1)
             
             if distance > distance_threshold:
                 logger.info(f"⚠️ Agent éloigné: {distance:.1f}m > {distance_threshold}m")
