@@ -217,6 +217,22 @@ class UserProfileView(APIView):
         user = request.user
         try:
             profile = user.profile
+            
+            # Récupérer le bureau de l'agent
+            bureau_obj = None
+            try:
+                agent = Agent.objects.get(user=user)
+                if agent.bureau:
+                    bureau_obj = {
+                        'id': agent.bureau.id,
+                        'nom': agent.bureau.nom,
+                        'latitude_centre': str(agent.bureau.latitude_centre),
+                        'longitude_centre': str(agent.bureau.longitude_centre),
+                        'rayon_metres': agent.bureau.rayon_metres
+                    }
+            except Agent.DoesNotExist:
+                pass
+            
             data = {
                 'id': user.id,
                 'username': user.username,
@@ -227,6 +243,7 @@ class UserProfileView(APIView):
                 'role_display': self.get_role_display(profile.role),
                 'service': profile.service.id if profile.service else None,
                 'direction': profile.direction.id if profile.direction else None,
+                'bureau_obj': bureau_obj,
                 'notifications_count': 0  # Par défaut 0 notifications
             }
             # Vérifier si les notifications sont configurées
