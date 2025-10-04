@@ -357,7 +357,7 @@ class PresenceSerializer(serializers.ModelSerializer):
 class OccurrenceSpecialeSerializer(serializers.ModelSerializer):
     agent_details = UserSerializer(source='agent', read_only=True)
     createur_details = UserSerializer(source='createur', read_only=True)
-    agent_id = serializers.IntegerField(write_only=True)
+    agent_id = serializers.IntegerField(required=True)
     createur_id = serializers.IntegerField(write_only=True, required=False)
     
     class Meta:
