@@ -364,8 +364,8 @@ class OccurrenceSpecialeSerializer(serializers.ModelSerializer):
         model = OccurrenceSpeciale
         fields = [
             'id', 'agent', 'agent_id', 'agent_details', 'type_occurrence', 'nom_occurrence',
-            'statut', 'date', 'heure_debut', 'heure_fin', 'createur', 'createur_id',
-            'createur_details', 'created_at', 'updated_at'
+            'statut', 'date', 'date_debut', 'date_fin', 'heure_debut', 'heure_fin', 
+            'createur', 'createur_id', 'createur_details', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'agent', 'createur', 'created_at', 'updated_at']
     
