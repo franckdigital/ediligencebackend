@@ -16,7 +16,7 @@ from .views_ import UserManagementViewSet, NotificationViewSet, UserRegistration
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
 from .geofencing_views import GeofenceAlertViewSet, GeofenceSettingsViewSet, AgentLocationViewSet, PushNotificationTokenViewSet
-from .device_locking_views import CheckDeviceLockView, LockDeviceView, UnlockDeviceView
+from .device_locking_views import CheckDeviceLockView, LockDeviceView, UnlockDeviceView, DeviceLockViewSet
 from django.urls import path, include
 from core.views_stats import PresenceStatsAPIView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
@@ -67,6 +67,7 @@ router.register(r'geofence-alerts', GeofenceAlertViewSet, basename='geofence-ale
 router.register(r'geofence-settings', GeofenceSettingsViewSet, basename='geofence-settings')
 router.register(r'agent-locations', AgentLocationViewSet, basename='agent-locations')
 router.register(r'push-tokens', PushNotificationTokenViewSet, basename='push-tokens')
+router.register(r'device-locks', DeviceLockViewSet, basename='device-locks')
 
 urlpatterns = [
     path('token/custom/', CustomTokenObtainPairView.as_view(), name='custom_token_obtain_pair'),

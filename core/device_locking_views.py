@@ -1,13 +1,41 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, viewsets
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.contrib.auth.models import User
 from django.utils import timezone
 from .models import UserProfile, DeviceLock
+from rest_framework import serializers
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class DeviceLockSerializer(serializers.ModelSerializer):
+    """Serializer pour les verrouillages d'appareils"""
+    class Meta:
+        model = DeviceLock
+        fields = ['id', 'device_id', 'user', 'username', 'email', 'locked_at', 'last_used']
+        read_only_fields = ['id', 'locked_at', 'last_used']
+
+
+class DeviceLockViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet pour lister les appareils verrouillés (admin uniquement)"""
+    queryset = DeviceLock.objects.all().order_by('-last_used')
+    serializer_class = DeviceLockSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    
+    def get_queryset(self):
+        # Vérifier que l'utilisateur est admin
+        try:
+            profile = self.request.user.profile
+            if profile.role not in ['ADMIN', 'superadmin']:
+                return DeviceLock.objects.none()
+        except:
+            return DeviceLock.objects.none()
+        
+        return DeviceLock.objects.all().order_by('-last_used')
 
 
 class CheckDeviceLockView(APIView):
