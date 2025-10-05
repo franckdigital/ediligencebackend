@@ -126,6 +126,7 @@ def check_agent_exits():
                 first_away_time = None
                 if all_away:
                     # Chercher toutes les positions du jour, triées par timestamp
+                    # MAIS ignorer les positions aberrantes (émulateur) > 10km
                     all_locations_today = AgentLocation.objects.filter(
                         agent=agent.user,
                         timestamp__date=current_date
@@ -140,6 +141,11 @@ def check_agent_exits():
                             float(bureau.latitude_centre),
                             float(bureau.longitude_centre)
                         )
+                        
+                        # Ignorer les positions aberrantes (émulateur) > 10km
+                        if loc_distance > 10000:
+                            logger.info(f"      ⚠️ Position aberrante ignorée: {loc.timestamp.strftime('%H:%M')} - Distance: {loc_distance:.1f}m (émulateur)")
+                            continue
                         
                         if loc_distance > distance_threshold:
                             first_away_time = loc.timestamp
