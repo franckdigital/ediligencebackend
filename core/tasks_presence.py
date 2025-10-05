@@ -34,7 +34,10 @@ def check_agent_exits():
     is_morning = morning_start <= current_time <= morning_end
     is_afternoon = afternoon_start <= current_time <= afternoon_end
     
-    if not (is_morning or is_afternoon):
+    # MODE TEST: Désactiver temporairement la vérification des heures
+    FORCE_CHECK = True  # Mettre à False pour réactiver la vérification des heures
+    
+    if not FORCE_CHECK and not (is_morning or is_afternoon):
         logger.info("⏰ Hors heures de travail (pause déjeuner ou hors horaires), pas de vérification")
         return
     
