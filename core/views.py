@@ -1180,8 +1180,19 @@ class SimplePresenceView(APIView):
             if action == 'arrivee':
                 if presence.heure_arrivee:
                     return Response({'error': 'Arrivée déjà enregistrée aujourd\'hui'}, status=status.HTTP_400_BAD_REQUEST)
-                presence.heure_arrivee = current_time
-                message = 'Arrivée enregistrée avec succès'
+                
+                # Vérification et ajustement de l'heure d'arrivée
+                from datetime import time as dt_time
+                heure_limite_arrivee = dt_time(7, 30)  # 7h30
+                
+                if current_time < heure_limite_arrivee:
+                    # Si pointage avant 7h30, ajuster à 7h30
+                    presence.heure_arrivee = heure_limite_arrivee
+                    message = f'Arrivée enregistrée à 07:30 (pointage effectué à {current_time.strftime("%H:%M")})'
+                    logger.info(f'[SimplePresenceView] Pointage avant 7h30 ajusté: {current_time.strftime("%H:%M")} -> 07:30 pour {user.username}')
+                else:
+                    presence.heure_arrivee = current_time
+                    message = 'Arrivée enregistrée avec succès'
             
             elif action == 'depart':
                 if not presence.heure_arrivee:
