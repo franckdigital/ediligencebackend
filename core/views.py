@@ -1128,6 +1128,12 @@ class SimplePresenceView(APIView):
             if not bureau:
                 bureau = Bureau.objects.first()  # Fallback sur le premier bureau
             
+            # Si l'agent n'a pas de bureau assigné, l'assigner maintenant
+            if bureau and not agent.bureau:
+                agent.bureau = bureau
+                agent.save()
+                logger.info(f'[SimplePresenceView] Bureau {bureau.nom} assigné automatiquement à {agent.user.username}')
+            
             if bureau and bureau.latitude_centre and bureau.longitude_centre:
                 # Fonction de calcul de distance (Haversine)
                 def haversine(lat1, lon1, lat2, lon2):
