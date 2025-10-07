@@ -1145,7 +1145,7 @@ class GeofenceSettings(models.Model):
     
     # Configuration des alertes
     distance_alerte_metres = models.IntegerField(default=200, help_text="Distance en mètres pour déclencher une alerte")
-    duree_minimale_hors_bureau_minutes = models.IntegerField(default=60, help_text="Durée minimale hors du bureau en minutes avant alerte")
+    duree_minimale_hors_bureau_minutes = models.IntegerField(default=5, help_text="Durée minimale hors du bureau en minutes avant alerte")
     frequence_verification_minutes = models.IntegerField(default=5, help_text="Fréquence de vérification de la position en minutes")
     
     # Jours de travail
