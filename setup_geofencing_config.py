@@ -74,14 +74,14 @@ def setup_geofencing_config():
         for bureau in bureaux:
             print(f"   ✅ {bureau.nom}")
             print(f"      Coordonnées: {bureau.latitude_centre}, {bureau.longitude_centre}")
-            print(f"      Rayon: {bureau.rayon_autorise_metres}m")
+            print(f"      Rayon: {bureau.rayon_metres}m")
             
             # Vérifier que les coordonnées sont définies
             if not bureau.latitude_centre or not bureau.longitude_centre:
                 print(f"      ⚠️  ATTENTION: Coordonnées manquantes!")
             
-            if not bureau.rayon_autorise_metres:
-                bureau.rayon_autorise_metres = settings.distance_alerte_metres
+            if not bureau.rayon_metres:
+                bureau.rayon_metres = settings.distance_alerte_metres
                 bureau.save()
                 print(f"      🔧 Rayon mis à jour: {settings.distance_alerte_metres}m")
     else:
