@@ -89,14 +89,14 @@ class ActiviteViewSet(viewsets.ModelViewSet):
                 from .models import DiligenceNotification
                 activite = Activite.objects.get(id=response.data['id'])
                 
-                if activite.agent_responsable:
+                if activite.responsable_principal:
                     DiligenceNotification.objects.create(
-                        user=activite.agent_responsable,
+                        user=activite.responsable_principal,
                         diligence=None,  # Pas de diligence associée
                         type_notification='nouvelle_diligence',
-                        message=f'Nouvelle activité créée dont vous êtes responsable: {activite.type} - {activite.description[:50]}...'
+                        message=f'Nouvelle activité créée dont vous êtes responsable: {activite.nom} - {activite.description[:50] if activite.description else ""}...'
                     )
-                    print(f"Notification d'activité créée pour {activite.agent_responsable.username}")
+                    print(f"Notification d'activité créée pour {activite.responsable_principal.username}")
             except Exception as e:
                 print(f"Erreur lors de la création de la notification d'activité: {e}")
         
