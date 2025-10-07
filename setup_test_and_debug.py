@@ -55,13 +55,16 @@ def setup_test_scenario():
     
     # Position dans zone (il y a 10 minutes)
     pos1_time = now - timedelta(minutes=10)
-    pos1 = AgentLocation.objects.create(
+    pos1 = AgentLocation(
         agent=user,
         latitude=bureau.latitude_centre,
         longitude=bureau.longitude_centre,
-        timestamp=pos1_time,
         dans_zone_autorisee=True
     )
+    pos1.save()
+    # Forcer le timestamp après création
+    AgentLocation.objects.filter(id=pos1.id).update(timestamp=pos1_time)
+    pos1.refresh_from_db()
     print(f"📍 Position 1: {pos1_time.strftime('%H:%M:%S')} - DANS ZONE (0m)")
     
     # Position hors zone (il y a 8 minutes)
@@ -76,23 +79,29 @@ def setup_test_scenario():
         float(bureau.latitude_centre), float(bureau.longitude_centre)
     )
     
-    pos2 = AgentLocation.objects.create(
+    pos2 = AgentLocation(
         agent=user,
         latitude=pos2_lat,
         longitude=pos2_lon,
-        timestamp=pos2_time,
         dans_zone_autorisee=False
     )
+    pos2.save()
+    # Forcer le timestamp après création
+    AgentLocation.objects.filter(id=pos2.id).update(timestamp=pos2_time)
+    pos2.refresh_from_db()
     print(f"📍 Position 2: {pos2_time.strftime('%H:%M:%S')} - HORS ZONE ({distance2:.1f}m)")
     
     # Position actuelle (maintenant)
-    pos3 = AgentLocation.objects.create(
+    pos3 = AgentLocation(
         agent=user,
         latitude=pos2_lat,
         longitude=pos2_lon,
-        timestamp=now,
         dans_zone_autorisee=False
     )
+    pos3.save()
+    # Forcer le timestamp après création
+    AgentLocation.objects.filter(id=pos3.id).update(timestamp=now)
+    pos3.refresh_from_db()
     print(f"📍 Position 3: {now.strftime('%H:%M:%S')} - TOUJOURS HORS ZONE ({distance2:.1f}m)")
     
     # 5. Vérifier la logique
