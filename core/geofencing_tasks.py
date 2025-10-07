@@ -91,51 +91,41 @@ def check_geofence_violations():
                 if distance > settings.distance_alerte_metres:
                     # Vérifier depuis quand l'agent est hors de la zone (durée configurable)
                     duree_minimale = timedelta(minutes=settings.duree_minimale_hors_bureau_minutes)
-                    time_threshold = now - duree_minimale
                     
-                    # Chercher la dernière position dans la zone autorisée
+                    # Chercher la dernière position dans la zone autorisée (sans limite de temps)
                     last_inside_position = AgentLocation.objects.filter(
                         agent=agent,
-                        dans_zone_autorisee=True,
-                        timestamp__gte=time_threshold
+                        dans_zone_autorisee=True
                     ).order_by('-timestamp').first()
                     
-                    # Si aucune position dans la zone dans la période définie, vérifier plus loin
-                    if not last_inside_position:
-                        # Chercher la dernière position dans la zone (sans limite de temps)
-                        last_inside_position = AgentLocation.objects.filter(
+                    # Si l'agent est hors zone depuis plus que la durée minimale, déclencher l'alerte
+                    if last_inside_position and (now - last_inside_position.timestamp) >= duree_minimale:
+                        # Vérifier qu'il n'y a pas déjà une alerte active récente
+                        recent_alert = GeofenceAlert.objects.filter(
                             agent=agent,
-                            dans_zone_autorisee=True
-                        ).order_by('-timestamp').first()
+                            bureau=bureau,
+                            type_alerte='sortie_zone',
+                            statut='active',
+                            timestamp_alerte__gte=now - timedelta(hours=2)
+                        ).exists()
                         
-                        # Si l'agent est hors zone depuis plus que la durée minimale, déclencher l'alerte
-                        if last_inside_position and (now - last_inside_position.timestamp) >= duree_minimale:
-                            # Vérifier qu'il n'y a pas déjà une alerte active récente
-                            recent_alert = GeofenceAlert.objects.filter(
+                        if not recent_alert:
+                            # Créer une nouvelle alerte
+                            alert = GeofenceAlert.objects.create(
                                 agent=agent,
                                 bureau=bureau,
                                 type_alerte='sortie_zone',
-                                statut='active',
-                                timestamp_alerte__gte=now - timedelta(hours=2)
-                            ).exists()
+                                latitude_agent=recent_location.latitude,
+                                longitude_agent=recent_location.longitude,
+                                distance_metres=int(distance),
+                                en_heures_travail=True
+                            )
                             
-                            if not recent_alert:
-                                # Créer une nouvelle alerte
-                                alert = GeofenceAlert.objects.create(
-                                    agent=agent,
-                                    bureau=bureau,
-                                    type_alerte='sortie_zone',
-                                    latitude_agent=recent_location.latitude,
-                                    longitude_agent=recent_location.longitude,
-                                    distance_metres=int(distance),
-                                    en_heures_travail=True
-                                )
-                                
-                                # Envoyer les notifications
-                                send_geofence_notifications_task.delay(alert.id)
-                                violations_count += 1
-                                
-                                print(f"Alerte créée pour {agent.username}: {int(distance)}m du bureau {bureau.nom}")
+                            # Envoyer les notifications
+                            send_geofence_notifications_task.delay(alert.id)
+                            violations_count += 1
+                            
+                            print(f"Alerte créée pour {agent.username}: {int(distance)}m du bureau {bureau.nom}")
             
             except Exception as e:
                 print(f"Erreur lors de la vérification pour {agent.username}: {e}")
