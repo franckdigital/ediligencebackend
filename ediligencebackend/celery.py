@@ -6,7 +6,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 # Définir le module de settings Django par défaut
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ediligencebackend.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ediligence.settings')
 
 # Créer l'instance Celery
 app = Celery('ediligencebackend')

@@ -9,7 +9,7 @@ import django
 from datetime import datetime, timedelta, time
 
 # Configuration Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ediligencebackend.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ediligence.settings')
 django.setup()
 
 from django.utils import timezone
