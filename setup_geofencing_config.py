@@ -122,29 +122,26 @@ def test_configuration():
         print(f"ℹ️  L'heure actuelle ({maintenant.strftime('%H:%M')}) n'est pas dans les heures de travail")
 
 def main():
-    """Fonction principale"""
     print("🔧 OUTIL DE CONFIGURATION GÉOFENCING")
     print("=" * 60)
     
     try:
         settings = setup_geofencing_config()
-        test_configuration()
-        
         print(f"\n💡 PROCHAINES ÉTAPES:")
         print("1. Redémarrez Celery Beat pour prendre en compte les nouvelles tâches")
         print("2. Vérifiez que Celery Worker fonctionne")
-        print("3. Testez avec: python test_geofencing_manual.py")
+        print("3. Testez avec: python test_geofencing_task.py")
         print("4. Surveillez les logs de Celery pour les erreurs")
         
         print(f"\n🚀 Commandes utiles:")
-        print("   Celery Worker: celery -A ediligencebackend worker --loglevel=info")
-        print("   Celery Beat: celery -A ediligencebackend beat --loglevel=info")
+        print("   Celery Worker: celery -A ediligence worker --loglevel=info")
+        print("   Celery Beat: celery -A ediligence beat --loglevel=info")
         print("   Test manuel: python manage.py shell -c \"from core.geofencing_tasks import check_geofence_violations; check_geofence_violations()\"")
+        print("   Script de test: python test_geofencing_task.py")
         
     except Exception as e:
-        print(f"❌ Erreur: {e}")
+        print(f" Erreur: {e}")
         import traceback
         traceback.print_exc()
-
 if __name__ == "__main__":
     main()

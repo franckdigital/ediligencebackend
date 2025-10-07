@@ -78,9 +78,9 @@ def test_geofence_task():
     try:
         violations_count = check_geofence_violations()
         print(f"✅ Tâche exécutée avec succès")
-        print(f"📊 Résultat: {violations_count} nouvelles alertes créées")
+        print(f"📊 Résultat: {violations_count or 0} nouvelles alertes créées")
         
-        if violations_count > 0:
+        if violations_count and violations_count > 0:
             # Afficher les alertes récentes
             recent_alerts = GeofenceAlert.objects.filter(
                 timestamp_alerte__gte=now - timedelta(minutes=5)
