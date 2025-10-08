@@ -315,14 +315,24 @@ class UserSerializer(serializers.ModelSerializer):
         # Créer l'utilisateur
         user = User.objects.create(**validated_data)
         
-        # Créer le profil utilisateur
-        UserProfile.objects.create(
+        # Créer le profil utilisateur seulement s'il n'existe pas
+        profile, created = UserProfile.objects.get_or_create(
             user=user,
-            role=role,
-            service=service,
-            matricule=matricule,
-            telephone=telephone
+            defaults={
+                'role': role,
+                'service': service,
+                'matricule': matricule,
+                'telephone': telephone
+            }
         )
+        
+        if not created:
+            # Mettre à jour le profil existant
+            profile.role = role or profile.role
+            profile.service = service or profile.service
+            profile.matricule = matricule or profile.matricule
+            profile.telephone = telephone or profile.telephone
+            profile.save()
         
         return user
 
