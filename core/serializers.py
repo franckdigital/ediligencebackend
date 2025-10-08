@@ -291,6 +291,41 @@ class UserSerializer(serializers.ModelSerializer):
             profile.save()
         return instance
 
+    def create(self, validated_data):
+        """Créer un nouvel utilisateur avec son profil"""
+        from django.contrib.auth.hashers import make_password
+        from .models import UserProfile
+        
+        # Extraire les données du profil
+        profile_data = {}
+        if 'profile' in validated_data:
+            profile_data = validated_data.pop('profile')
+        
+        # Extraire les champs du profil depuis les données principales
+        role = validated_data.pop('role', profile_data.get('role', 'AGENT'))
+        service = validated_data.pop('service', profile_data.get('service'))
+        matricule = validated_data.pop('matricule', profile_data.get('matricule'))
+        telephone = validated_data.pop('telephone', profile_data.get('telephone'))
+        
+        # Traiter le mot de passe
+        password = validated_data.pop('password', None)
+        if password:
+            validated_data['password'] = make_password(password)
+        
+        # Créer l'utilisateur
+        user = User.objects.create(**validated_data)
+        
+        # Créer le profil utilisateur
+        UserProfile.objects.create(
+            user=user,
+            role=role,
+            service=service,
+            matricule=matricule,
+            telephone=telephone
+        )
+        
+        return user
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # S'assurer que tous les champs principaux sont présents
