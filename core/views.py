@@ -1107,6 +1107,19 @@ class SimplePresenceView(APIView):
         if not latitude or not longitude:
             return Response({'error': 'Position GPS requise'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Correction automatique des coordonnées GPS aberrantes
+        from .gps_correction import correct_gps_coordinates
+        gps_correction = correct_gps_coordinates(latitude, longitude, user)
+        
+        # Utiliser les coordonnées corrigées
+        corrected_latitude = gps_correction['latitude']
+        corrected_longitude = gps_correction['longitude']
+        gps_corrected = gps_correction['corrected']
+        gps_message = gps_correction['message']
+        
+        if gps_corrected:
+            logger.warning(f'[SimplePresenceView] GPS corrigé pour {user.username}: {latitude},{longitude} -> {corrected_latitude},{corrected_longitude}')
+        
         try:
             # Récupérer ou créer l'agent automatiquement
             agent, created = Agent.objects.get_or_create(
@@ -1146,9 +1159,9 @@ class SimplePresenceView(APIView):
                     c = 2*asin(sqrt(a))
                     return R * c
                 
-                # Calculer la distance
+                # Calculer la distance avec les coordonnées corrigées
                 distance = haversine(
-                    float(latitude), float(longitude),
+                    float(corrected_latitude), float(corrected_longitude),
                     float(bureau.latitude_centre), float(bureau.longitude_centre)
                 )
                 
@@ -1177,8 +1190,8 @@ class SimplePresenceView(APIView):
                 date_presence=today,
                 defaults={
                     'statut': 'présent',
-                    'latitude': latitude,
-                    'longitude': longitude,
+                    'latitude': corrected_latitude,
+                    'longitude': corrected_longitude,
                     'localisation_valide': True,
                 }
             )
@@ -1210,7 +1223,8 @@ class SimplePresenceView(APIView):
             
             presence.save()
             
-            return Response({
+            # Préparer la réponse avec information de correction GPS
+            response_data = {
                 'success': True,
                 'message': message,
                 'presence': {
@@ -1219,7 +1233,18 @@ class SimplePresenceView(APIView):
                     'heure_depart': presence.heure_depart,
                     'statut': presence.statut
                 }
-            }, status=status.HTTP_200_OK)
+            }
+            
+            # Ajouter l'information de correction GPS si applicable
+            if gps_corrected:
+                response_data['gps_correction'] = {
+                    'corrected': True,
+                    'message': gps_message,
+                    'original_coordinates': {'latitude': latitude, 'longitude': longitude},
+                    'corrected_coordinates': {'latitude': corrected_latitude, 'longitude': corrected_longitude}
+                }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
             
         except Agent.DoesNotExist:
             return Response({'error': 'Profil agent non trouvé'}, status=status.HTTP_404_NOT_FOUND)
