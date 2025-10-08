@@ -18,8 +18,8 @@ def check_agent_exits():
     pendant plus d'une heure et marquer leur sortie automatiquement
     
     Heures de surveillance :
-    - Matin : 7h30 - 12h30
-    - Après-midi/Soir : 13h30 - 22h00 (inclut les heures supplémentaires)
+    - Matin : 7h30 - 13h30
+    - Après-midi/Soir : 13h30 - 22h00 (surveillance continue)
     """
     logger.info("🔍 Vérification des sorties d'agents...")
     
@@ -28,10 +28,10 @@ def check_agent_exits():
     current_time = now.time()
     current_date = now.date()
     
-    # Vérifier pendant les heures de travail (7h30-12h30 et 13h30-22h00)
-    # Cela permet de détecter les sorties des agents en heures supplémentaires
+    # Vérifier pendant les heures de travail (7h30-13h30 et 13h30-22h00)
+    # Surveillance continue sans pause déjeuner
     morning_start = time(7, 30)
-    morning_end = time(12, 30)
+    morning_end = time(13, 30)   # Étendu jusqu'à 13h30
     afternoon_start = time(13, 30)
     afternoon_end = time(22, 0)  # Jusqu'à 22h00
     
