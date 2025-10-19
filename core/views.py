@@ -56,9 +56,19 @@ class ImputationFileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = ImputationFile.objects.all()
-        diligence_id = self.request.query_params.get('diligence_id')
+        
+        # Filtrage par diligence (support de 'diligence' et 'diligence_id')
+        diligence_id = self.request.query_params.get('diligence') or self.request.query_params.get('diligence_id')
         if diligence_id:
             queryset = queryset.filter(diligence_id=diligence_id)
+            print(f"[DEBUG] ImputationFile filtered by diligence: {diligence_id}")
+        
+        # Filtrage par agent (utilisateur imputé)
+        agent_id = self.request.query_params.get('agent')
+        if agent_id:
+            queryset = queryset.filter(agent_id=agent_id)
+            print(f"[DEBUG] ImputationFile filtered by agent: {agent_id}, count: {queryset.count()}")
+        
         return queryset
     
     def create(self, request, *args, **kwargs):
