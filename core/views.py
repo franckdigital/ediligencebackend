@@ -518,7 +518,7 @@ class DiligenceViewSet(viewsets.ModelViewSet):
 
         # Build queryset for diligences accessible by ImputationFile (agent imputation)
         from core.models import ImputationFile
-        imputation_file_qs = base_qs.filter(imputationfile__agent=user)
+        imputation_file_qs = base_qs.filter(imputation_files__agent=user)
         print(f"[DEBUG] ImputationFile diligences count: {imputation_file_qs.count()}")
 
         # Filtrage par rôle
