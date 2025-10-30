@@ -516,6 +516,11 @@ class DiligenceViewSet(viewsets.ModelViewSet):
         imputation_access_qs = base_qs.filter(imputation_access__user=user)
         print(f"[DEBUG] ImputationAccess diligences count: {imputation_access_qs.count()}")
 
+        # Build queryset for diligences accessible by ImputationFile (agent imputation)
+        from core.models import ImputationFile
+        imputation_file_qs = base_qs.filter(imputationfile__agent=user)
+        print(f"[DEBUG] ImputationFile diligences count: {imputation_file_qs.count()}")
+
         # Filtrage par rôle
         # 1. Diligences où l'utilisateur est dans les agents assignés
         assigned_qs = base_qs.filter(agents=user)
@@ -525,8 +530,8 @@ class DiligenceViewSet(viewsets.ModelViewSet):
             # ADMIN peut voir toutes les diligences du système
             qs = base_qs
             print(f"[DEBUG] ADMIN - Using all diligences")
-            # Combine with ImputationAccess-based queryset (union, remove duplicates)
-            final_qs = (qs | imputation_access_qs).distinct()
+            # Combine with ImputationAccess and ImputationFile-based querysets (union, remove duplicates)
+            final_qs = (qs | imputation_access_qs | imputation_file_qs).distinct()
         elif role == 'DIRECTEUR':
             # DIRECTEUR peut voir toutes les diligences de sa direction ET des services rattachés
             user_direction = profile.service.direction if profile.service else None
@@ -553,10 +558,11 @@ class DiligenceViewSet(viewsets.ModelViewSet):
                 diligence_ids.update(direction_qs.values_list('id', flat=True))
                 diligence_ids.update(agents_direction_qs.values_list('id', flat=True))
                 diligence_ids.update(imputation_access_qs.values_list('id', flat=True))
+                diligence_ids.update(imputation_file_qs.values_list('id', flat=True))
                 
                 final_qs = base_qs.filter(id__in=diligence_ids)
             else:
-                final_qs = (assigned_qs | imputation_access_qs).distinct()
+                final_qs = (assigned_qs | imputation_access_qs | imputation_file_qs).distinct()
         elif role == 'SUPERIEUR':
             # SUPERIEUR peut voir ses propres diligences ET celles de ses agents
             user_service = profile.service if profile.service else None
@@ -580,13 +586,14 @@ class DiligenceViewSet(viewsets.ModelViewSet):
                 diligence_ids.update(service_qs.values_list('id', flat=True))
                 diligence_ids.update(agents_qs.values_list('id', flat=True))
                 diligence_ids.update(imputation_access_qs.values_list('id', flat=True))
+                diligence_ids.update(imputation_file_qs.values_list('id', flat=True))
                 
                 final_qs = base_qs.filter(id__in=diligence_ids)
             else:
-                final_qs = (assigned_qs | imputation_access_qs).distinct()
+                final_qs = (assigned_qs | imputation_access_qs | imputation_file_qs).distinct()
         else:
-            # Autres rôles (SECRETAIRE, AGENT) ne voient que leurs diligences assignées
-            final_qs = (assigned_qs | imputation_access_qs).distinct()
+            # Autres rôles (SECRETAIRE, AGENT) ne voient que leurs diligences assignées + imputées
+            final_qs = (assigned_qs | imputation_access_qs | imputation_file_qs).distinct()
             print(f"[DEBUG] {role} - Using assigned + imputation diligences")
 
         print(f"[DEBUG] Final queryset count: {final_qs.count()}")
