@@ -198,6 +198,7 @@ class ReunionViewSet(viewsets.ModelViewSet):
     search_fields = ['intitule', 'description', 'lieu']
     ordering_fields = ['date_debut', 'date_fin', 'created_at']
     ordering = ['-date_debut']
+    allowed_creator_roles = {'ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE'}
     
     def get_queryset(self):
         """
