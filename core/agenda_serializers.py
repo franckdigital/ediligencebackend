@@ -41,7 +41,10 @@ class RendezVousSerializer(serializers.ModelSerializer):
             'statut', 'statut_display', 'documents',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'organisateur']
+        extra_kwargs = {
+            'organisateur': {'required': False, 'allow_null': True}
+        }
     
     def get_organisateur_name(self, obj):
         return f"{obj.organisateur.first_name} {obj.organisateur.last_name}".strip() or obj.organisateur.username
