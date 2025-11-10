@@ -86,7 +86,8 @@ class RendezVousViewSet(viewsets.ModelViewSet):
                 Notification.objects.create(
                     user=rendezvous.responsable,
                     type_notif='nouvelle_demande',
-                    contenu=f"Nouveau rendez-vous assigné: {rendezvous.visiteur_nom} {rendezvous.visiteur_prenoms} ({rendezvous.objet[:80]})",
+                    contenu=f"Nouveau rendez-vous assigné: {rendezvous.visiteur_nom} {rendezvous.visiteur_prenoms} ({(rendezvous.objet or '')[:80]})",
+                    message=f"Nouveau rendez-vous: {rendezvous.visiteur_nom} {rendezvous.visiteur_prenoms} — {(rendezvous.objet or '')[:80]}",
                     lien=f"/agenda"
                 )
             except Exception:
@@ -238,7 +239,25 @@ class ReunionViewSet(viewsets.ModelViewSet):
         """
         Enregistrer l'organisateur lors de la création
         """
-        serializer.save(organisateur=self.request.user)
+        reunion = serializer.save(organisateur=self.request.user)
+        # Notifier chaque participant invité à la réunion
+        try:
+            for participant in reunion.participants.all():
+                if participant == self.request.user:
+                    continue
+                try:
+                    Notification.objects.create(
+                        user=participant,
+                        type_notif='nouvelle_demande',
+                        contenu=f"Invitation à une réunion: {reunion.intitule} le {reunion.date_debut.strftime('%d/%m/%Y %H:%M')}",
+                        message=f"Réunion: {reunion.intitule} — {reunion.date_debut.strftime('%d/%m/%Y %H:%M')}",
+                        lien="/agenda"
+                    )
+                except Exception:
+                    # Ne pas bloquer la création en cas d'erreur de notification individuelle
+                    pass
+        except Exception:
+            pass
     
     @action(detail=True, methods=['post'])
     def changer_statut(self, request, pk=None):
