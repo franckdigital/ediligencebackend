@@ -1283,7 +1283,7 @@ class RendezVous(models.Model):
     ]
     
     # Informations principales
-    objet = models.TextField(help_text="Objet du rendez-vous")
+    objet = models.TextField(help_text="Objet du rendez-vous", blank=True, null=True, default="")
     
     # Dates et lieu
     date_debut = models.DateTimeField(help_text="Début prévu")
@@ -1307,14 +1307,16 @@ class RendezVous(models.Model):
     )
     
     # Informations visiteur
-    visiteur_nom = models.CharField(max_length=255, help_text="Nom du visiteur")
-    visiteur_prenoms = models.CharField(max_length=255, help_text="Prénoms du visiteur")
+    visiteur_nom = models.CharField(max_length=255, help_text="Nom du visiteur", blank=True, null=True)
+    visiteur_prenoms = models.CharField(max_length=255, help_text="Prénoms du visiteur", blank=True, null=True)
     visiteur_fonction = models.CharField(max_length=255, blank=True, null=True, help_text="Fonction du visiteur")
     visiteur_telephone = models.CharField(max_length=50, blank=True, null=True, help_text="Téléphone du visiteur")
     visiteur_type = models.CharField(
-        max_length=20, 
-        choices=TYPE_VISITEUR_CHOICES, 
-        help_text="Type de visiteur"
+        max_length=20,
+        choices=TYPE_VISITEUR_CHOICES,
+        help_text="Type de visiteur",
+        blank=True,
+        null=True
     )
     visiteur_structure = models.CharField(
         max_length=255, 
