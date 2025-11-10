@@ -15,7 +15,7 @@ from core.models import (
     PrestataireEtape, Evaluation, DiligenceDocument, ImputationAccess,
     Fichier, Commentaire, Tache, Activite, Domaine, Projet,
     GeofenceAlert, GeofenceSettings, AgentLocation, PushNotificationToken,
-    OccurrenceSpeciale
+    OccurrenceSpeciale, RendezVous, RendezVousDocument, Reunion, ReunionPresence
 )
 
 class ImputationFileSerializer(serializers.ModelSerializer):

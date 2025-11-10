@@ -17,6 +17,7 @@ from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, Fichier
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
 from .geofencing_views import GeofenceAlertViewSet, GeofenceSettingsViewSet, AgentLocationViewSet, PushNotificationTokenViewSet
 from .device_locking_views import CheckDeviceLockView, LockDeviceView, UnlockDeviceView, DeviceLockViewSet
+from .agenda_views import RendezVousViewSet, RendezVousDocumentViewSet, ReunionViewSet, ReunionPresenceViewSet
 from django.urls import path, include
 from core.views_stats import PresenceStatsAPIView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
@@ -68,6 +69,12 @@ router.register(r'geofence-settings', GeofenceSettingsViewSet, basename='geofenc
 router.register(r'agent-locations', AgentLocationViewSet, basename='agent-locations')
 router.register(r'push-tokens', PushNotificationTokenViewSet, basename='push-tokens')
 router.register(r'device-locks', DeviceLockViewSet, basename='device-locks')
+
+# --- ROUTES AGENDA ---
+router.register(r'rendezvous', RendezVousViewSet, basename='rendezvous')
+router.register(r'rendezvous-documents', RendezVousDocumentViewSet, basename='rendezvous-documents')
+router.register(r'reunions', ReunionViewSet, basename='reunions')
+router.register(r'reunion-presences', ReunionPresenceViewSet, basename='reunion-presences')
 
 urlpatterns = [
     path('token/custom/', CustomTokenObtainPairView.as_view(), name='custom_token_obtain_pair'),

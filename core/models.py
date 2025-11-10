@@ -1264,3 +1264,171 @@ class PushNotificationToken(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.platform} - {self.token[:20]}..."
+
+
+# --- MODULE AGENDA : RENDEZ-VOUS ---
+class RendezVous(models.Model):
+    """Modèle pour gérer les rendez-vous individuels"""
+    STATUT_CHOICES = [
+        ('prevu', 'Prévu'),
+        ('en_cours', 'En cours'),
+        ('effectue', 'Effectué'),
+        ('annule', 'Annulé'),
+    ]
+    
+    MODE_CHOICES = [
+        ('presentiel', 'Présentiel'),
+        ('en_ligne', 'En ligne'),
+    ]
+    
+    # Informations principales
+    titre = models.CharField(max_length=255, help_text="Ex: Entretien individuel de performance")
+    description = models.TextField(blank=True, null=True, help_text="Détails du rendez-vous")
+    
+    # Dates et lieu
+    date_debut = models.DateTimeField(help_text="Début prévu")
+    date_fin = models.DateTimeField(help_text="Fin prévue")
+    lieu = models.CharField(max_length=255, blank=True, null=True, help_text="Salle ou bureau concerné")
+    
+    # Participants
+    organisateur = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='rendezvous_organises',
+        help_text="Directeur ou responsable"
+    )
+    participant = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='rendezvous_participant',
+        help_text="Agent / visiteur concerné"
+    )
+    
+    # Statut et mode
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='prevu')
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default='presentiel')
+    lien_visio = models.URLField(blank=True, null=True, help_text="Lien Teams, Zoom, etc.")
+    
+    # Documents et notes
+    commentaires = models.TextField(blank=True, null=True, help_text="Notes avant/après entretien")
+    
+    # Audit trail
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Rendez-vous'
+        verbose_name_plural = 'Rendez-vous'
+        ordering = ['-date_debut']
+    
+    def __str__(self):
+        return f"{self.titre} - {self.date_debut.strftime('%d/%m/%Y %H:%M')}"
+
+
+class RendezVousDocument(models.Model):
+    """Documents associés à un rendez-vous"""
+    rendezvous = models.ForeignKey(
+        RendezVous, 
+        on_delete=models.CASCADE, 
+        related_name='documents'
+    )
+    fichier = models.FileField(upload_to='rendezvous_documents/')
+    nom = models.CharField(max_length=255)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    
+    class Meta:
+        verbose_name = 'Document de rendez-vous'
+        verbose_name_plural = 'Documents de rendez-vous'
+    
+    def __str__(self):
+        return f"{self.nom} - {self.rendezvous.titre}"
+
+
+# --- MODULE AGENDA : RÉUNIONS ---
+class Reunion(models.Model):
+    """Modèle pour gérer les réunions de service ou interdirections"""
+    TYPE_REUNION_CHOICES = [
+        ('presentiel', 'Présentiel'),
+        ('en_ligne', 'En ligne'),
+        ('mixte', 'Mixte'),
+    ]
+    
+    STATUT_CHOICES = [
+        ('prevu', 'Prévu'),
+        ('en_cours', 'En cours'),
+        ('termine', 'Terminé'),
+        ('annule', 'Annulé'),
+    ]
+    
+    # Informations principales
+    intitule = models.CharField(max_length=255, help_text="Nom de la réunion")
+    description = models.TextField(blank=True, null=True, help_text="Ordre du jour")
+    
+    # Type et dates
+    type_reunion = models.CharField(max_length=20, choices=TYPE_REUNION_CHOICES, default='presentiel')
+    date_debut = models.DateTimeField(help_text="Début de la réunion")
+    date_fin = models.DateTimeField(help_text="Fin de la réunion")
+    
+    # Lieu
+    lieu = models.CharField(max_length=255, blank=True, null=True, help_text="Salle / lien Zoom")
+    lien_zoom = models.URLField(blank=True, null=True, help_text="Créé via API Zoom")
+    
+    # Organisateur et participants
+    organisateur = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='reunions_organisees',
+        help_text="Directeur ou sous-directeur"
+    )
+    participants = models.ManyToManyField(
+        User, 
+        related_name='reunions_participant',
+        blank=True,
+        help_text="Liste des agents invités"
+    )
+    
+    # Statut
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='prevu')
+    
+    # Compte rendu
+    compte_rendu = models.TextField(blank=True, null=True, help_text="Résumé de la réunion")
+    pv_fichier = models.FileField(
+        upload_to='reunions_pv/', 
+        blank=True, 
+        null=True,
+        help_text="Procès-verbal uploadé"
+    )
+    
+    # Audit trail
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Réunion'
+        verbose_name_plural = 'Réunions'
+        ordering = ['-date_debut']
+    
+    def __str__(self):
+        return f"{self.intitule} - {self.date_debut.strftime('%d/%m/%Y %H:%M')}"
+
+
+class ReunionPresence(models.Model):
+    """Suivi de la présence aux réunions"""
+    reunion = models.ForeignKey(
+        Reunion, 
+        on_delete=models.CASCADE, 
+        related_name='presences'
+    )
+    participant = models.ForeignKey(User, on_delete=models.CASCADE)
+    present = models.BooleanField(default=False)
+    heure_arrivee = models.TimeField(blank=True, null=True)
+    commentaire = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        verbose_name = 'Présence à une réunion'
+        verbose_name_plural = 'Présences aux réunions'
+        unique_together = ['reunion', 'participant']
+    
+    def __str__(self):
+        return f"{self.participant.username} - {self.reunion.intitule} ({'Présent' if self.present else 'Absent'})"
