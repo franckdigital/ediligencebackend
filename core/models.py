@@ -1276,41 +1276,55 @@ class RendezVous(models.Model):
         ('annule', 'Annulé'),
     ]
     
-    MODE_CHOICES = [
-        ('presentiel', 'Présentiel'),
-        ('en_ligne', 'En ligne'),
+    TYPE_VISITEUR_CHOICES = [
+        ('ministere', 'Ministère'),
+        ('entreprise', 'Entreprise'),
+        ('particulier', 'Particulier'),
     ]
     
     # Informations principales
-    titre = models.CharField(max_length=255, help_text="Ex: Entretien individuel de performance")
-    description = models.TextField(blank=True, null=True, help_text="Détails du rendez-vous")
+    objet = models.TextField(help_text="Objet du rendez-vous")
     
     # Dates et lieu
     date_debut = models.DateTimeField(help_text="Début prévu")
     date_fin = models.DateTimeField(help_text="Fin prévue")
     lieu = models.CharField(max_length=255, blank=True, null=True, help_text="Salle ou bureau concerné")
     
-    # Participants
+    # Organisateur
     organisateur = models.ForeignKey(
         User, 
         on_delete=models.CASCADE, 
         related_name='rendezvous_organises',
         help_text="Directeur ou responsable"
     )
-    participant = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        related_name='rendezvous_participant',
-        help_text="Agent / visiteur concerné"
+    # Responsable (directeur/sous-directeur/chef de service/supérieur)
+    responsable = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rendezvous_assignes'
     )
     
-    # Statut et mode
-    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='prevu')
-    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default='presentiel')
-    lien_visio = models.URLField(blank=True, null=True, help_text="Lien Teams, Zoom, etc.")
+    # Informations visiteur
+    visiteur_nom = models.CharField(max_length=255, help_text="Nom du visiteur")
+    visiteur_prenoms = models.CharField(max_length=255, help_text="Prénoms du visiteur")
+    visiteur_fonction = models.CharField(max_length=255, blank=True, null=True, help_text="Fonction du visiteur")
+    visiteur_telephone = models.CharField(max_length=50, blank=True, null=True, help_text="Téléphone du visiteur")
+    visiteur_type = models.CharField(
+        max_length=20, 
+        choices=TYPE_VISITEUR_CHOICES, 
+        help_text="Type de visiteur"
+    )
+    visiteur_structure = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True, 
+        help_text="Nom du ministère/entreprise ou autre précision"
+    )
     
-    # Documents et notes
-    commentaires = models.TextField(blank=True, null=True, help_text="Notes avant/après entretien")
+    # Statut
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='prevu')
     
     # Audit trail
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1322,7 +1336,7 @@ class RendezVous(models.Model):
         ordering = ['-date_debut']
     
     def __str__(self):
-        return f"{self.titre} - {self.date_debut.strftime('%d/%m/%Y %H:%M')}"
+        return f"{self.visiteur_nom} {self.visiteur_prenoms} - {self.date_debut.strftime('%d/%m/%Y %H:%M')}"
 
 
 class RendezVousDocument(models.Model):

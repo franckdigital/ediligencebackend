@@ -22,21 +22,23 @@ class RendezVousDocumentSerializer(serializers.ModelSerializer):
 
 class RendezVousSerializer(serializers.ModelSerializer):
     organisateur_name = serializers.SerializerMethodField()
-    participant_name = serializers.SerializerMethodField()
     organisateur_email = serializers.SerializerMethodField()
-    participant_email = serializers.SerializerMethodField()
+    responsable_name = serializers.SerializerMethodField()
+    responsable_email = serializers.SerializerMethodField()
     documents = RendezVousDocumentSerializer(many=True, read_only=True)
     statut_display = serializers.CharField(source='get_statut_display', read_only=True)
-    mode_display = serializers.CharField(source='get_mode_display', read_only=True)
+    visiteur_type_display = serializers.CharField(source='get_visiteur_type_display', read_only=True)
     
     class Meta:
         model = RendezVous
         fields = [
-            'id', 'titre', 'description', 'date_debut', 'date_fin', 'lieu',
+            'id', 'objet', 'date_debut', 'date_fin', 'lieu',
             'organisateur', 'organisateur_name', 'organisateur_email',
-            'participant', 'participant_name', 'participant_email',
-            'statut', 'statut_display', 'mode', 'mode_display',
-            'lien_visio', 'commentaires', 'documents',
+            'responsable', 'responsable_name', 'responsable_email',
+            'visiteur_nom', 'visiteur_prenoms', 'visiteur_fonction', 
+            'visiteur_telephone', 'visiteur_type', 'visiteur_type_display', 
+            'visiteur_structure',
+            'statut', 'statut_display', 'documents',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -44,14 +46,16 @@ class RendezVousSerializer(serializers.ModelSerializer):
     def get_organisateur_name(self, obj):
         return f"{obj.organisateur.first_name} {obj.organisateur.last_name}".strip() or obj.organisateur.username
     
-    def get_participant_name(self, obj):
-        return f"{obj.participant.first_name} {obj.participant.last_name}".strip() or obj.participant.username
-    
     def get_organisateur_email(self, obj):
         return obj.organisateur.email
-    
-    def get_participant_email(self, obj):
-        return obj.participant.email
+
+    def get_responsable_name(self, obj):
+        if obj.responsable:
+            return f"{obj.responsable.first_name} {obj.responsable.last_name}".strip() or obj.responsable.username
+        return None
+
+    def get_responsable_email(self, obj):
+        return obj.responsable.email if obj.responsable else None
 
 
 # --- SERIALIZERS AGENDA : RÉUNIONS ---

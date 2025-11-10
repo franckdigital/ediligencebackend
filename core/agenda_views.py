@@ -9,7 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import datetime, timedelta
 
-from core.models import RendezVous, RendezVousDocument, Reunion, ReunionPresence, UserProfile
+from core.models import RendezVous, RendezVousDocument, Reunion, ReunionPresence, UserProfile, Notification
 from core.agenda_serializers import (
     RendezVousSerializer, RendezVousDocumentSerializer,
     ReunionSerializer, ReunionPresenceSerializer
@@ -29,7 +29,7 @@ class RendezVousViewSet(viewsets.ModelViewSet):
     serializer_class = RendezVousSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['titre', 'description', 'lieu']
+    search_fields = ['objet', 'lieu', 'visiteur_nom', 'visiteur_prenoms', 'visiteur_structure']
     ordering_fields = ['date_debut', 'date_fin', 'created_at']
     ordering = ['-date_debut']
     
@@ -48,19 +48,19 @@ class RendezVousViewSet(viewsets.ModelViewSet):
         # ADMIN voit tous les rendez-vous
         if role == 'ADMIN':
             queryset = RendezVous.objects.all()
-        # DIRECTEUR, SOUS_DIRECTEUR, CHEF_SERVICE, SUPERIEUR voient leurs rendez-vous organisés et ceux où ils participent
+        # DIRECTEUR, SOUS_DIRECTEUR, CHEF_SERVICE, SUPERIEUR voient leurs rendez-vous organisés et ceux où ils sont responsables
         elif role in ['DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR']:
             queryset = RendezVous.objects.filter(
-                Q(organisateur=user) | Q(participant=user)
+                Q(organisateur=user) | Q(responsable=user)
             )
-        # SECRETAIRE voit les rendez-vous de son service
+        # SECRETAIRE voit les rendez-vous qu'il organise ou dont il est responsable
         elif role == 'SECRETAIRE':
             queryset = RendezVous.objects.filter(
-                Q(organisateur=user) | Q(participant=user)
+                Q(organisateur=user) | Q(responsable=user)
             )
-        # AGENT voit uniquement ses rendez-vous
+        # AGENT ne voit que ceux dont il est organisateur (ou responsable si assigné)
         else:
-            queryset = RendezVous.objects.filter(participant=user)
+            queryset = RendezVous.objects.filter(Q(organisateur=user) | Q(responsable=user))
         
         # Filtres optionnels
         statut = self.request.query_params.get('statut')
@@ -78,10 +78,19 @@ class RendezVousViewSet(viewsets.ModelViewSet):
         return queryset.distinct()
     
     def perform_create(self, serializer):
-        """
-        Enregistrer l'organisateur lors de la création
-        """
-        serializer.save(organisateur=self.request.user)
+        """Enregistrer l'organisateur et notifier le responsable si présent"""
+        rendezvous = serializer.save(organisateur=self.request.user)
+        # Envoyer une notification au responsable si défini
+        if rendezvous.responsable:
+            try:
+                Notification.objects.create(
+                    user=rendezvous.responsable,
+                    type_notif='nouvelle_demande',
+                    contenu=f"Nouveau rendez-vous assigné: {rendezvous.visiteur_nom} {rendezvous.visiteur_prenoms} ({rendezvous.objet[:80]})",
+                    lien=f"/agenda"
+                )
+            except Exception:
+                pass
     
     @action(detail=True, methods=['post'])
     def changer_statut(self, request, pk=None):
@@ -110,7 +119,7 @@ class RendezVousViewSet(viewsets.ModelViewSet):
         """
         user = request.user
         rendezvous = RendezVous.objects.filter(
-            Q(organisateur=user) | Q(participant=user)
+            Q(organisateur=user) | Q(responsable=user)
         ).order_by('-date_debut')
         
         serializer = self.get_serializer(rendezvous, many=True)
@@ -125,10 +134,28 @@ class RendezVousViewSet(viewsets.ModelViewSet):
         now = timezone.now()
         
         rendezvous = RendezVous.objects.filter(
-            Q(organisateur=user) | Q(participant=user),
+            Q(organisateur=user) | Q(responsable=user),
             date_debut__gte=now,
             statut='prevu'
         ).order_by('date_debut')
+
+    @action(detail=False, methods=['get'])
+    def superieurs(self, request):
+        """Retourne la liste des utilisateurs ayant un rôle supérieur (DIRECTEUR, SOUS_DIRECTEUR, CHEF_SERVICE, SUPERIEUR)"""
+        roles = ['DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR']
+        users = UserProfile.objects.filter(role__in=roles).select_related('user')
+        data = [
+            {
+                'id': up.user.id,
+                'username': up.user.username,
+                'first_name': up.user.first_name,
+                'last_name': up.user.last_name,
+                'email': up.user.email,
+                'role': up.role,
+            }
+            for up in users
+        ]
+        return Response(data)
         
         serializer = self.get_serializer(rendezvous, many=True)
         return Response(serializer.data)
