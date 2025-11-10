@@ -221,6 +221,34 @@ class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(getattr(user, 'profile', None), 'role', None)
+        qs = Notification.objects.all().order_by('-created_at')
+        # Admin (et superadmin) voient tout, sinon seulement notifications de l'utilisateur
+        if role in ['ADMIN', 'superadmin']:
+            return qs
+        return qs.filter(user=user)
+
+    @action(detail=True, methods=['post'])
+    def mark_as_read(self, request, pk=None):
+        notif = self.get_object()
+        # Sécurité: empêcher de marquer des notifs d'autrui (hors admin)
+        role = getattr(getattr(request.user, 'profile', None), 'role', None)
+        if notif.user != request.user and role not in ['ADMIN', 'superadmin']:
+            return Response({'detail': "Non autorisé"}, status=status.HTTP_403_FORBIDDEN)
+        notif.read = True
+        notif.save()
+        return Response({'message': 'Notification marquée comme lue'})
+
+    @action(detail=False, methods=['post'])
+    def mark_all_as_read(self, request):
+        role = getattr(getattr(request.user, 'profile', None), 'role', None)
+        qs = self.get_queryset()
+        # Si admin, on peut permettre un scope global optionnel; par défaut on limite à get_queryset()
+        qs.update(read=True)
+        return Response({'message': 'Notifications marquées comme lues'})
+
 class ObservationViewSet(viewsets.ModelViewSet):
     queryset = Observation.objects.all()
     serializer_class = ObservationSerializer

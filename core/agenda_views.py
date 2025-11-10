@@ -32,6 +32,7 @@ class RendezVousViewSet(viewsets.ModelViewSet):
     search_fields = ['objet', 'lieu', 'visiteur_nom', 'visiteur_prenoms', 'visiteur_structure']
     ordering_fields = ['date_debut', 'date_fin', 'created_at']
     ordering = ['-date_debut']
+    allowed_creator_roles = {'ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE'}
     
     def get_queryset(self):
         """
@@ -112,6 +113,13 @@ class RendezVousViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(rendezvous)
         return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        profile = getattr(request.user, 'profile', None)
+        role = getattr(profile, 'role', None)
+        if role not in self.allowed_creator_roles:
+            return Response({'detail': "Vous n'êtes pas autorisé à créer un rendez-vous."}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
     
     @action(detail=False, methods=['get'])
     def mes_rendezvous(self, request):
@@ -278,6 +286,33 @@ class ReunionViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(reunion)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def ajouter_compte_rendu(self, request, pk=None):
+        """Ajouter ou mettre à jour le compte rendu et marquer la réunion comme terminée.
+        Seul l'organisateur peut effectuer cette action.
+        Payload attendu: { "compte_rendu": "..." }
+        """
+        reunion = self.get_object()
+        if reunion.organisateur != request.user:
+            return Response({"detail": "Action réservée à l'organisateur."}, status=status.HTTP_403_FORBIDDEN)
+        compte_rendu = request.data.get('compte_rendu', '').strip()
+        reunion.compte_rendu = compte_rendu
+        # Marquer comme terminée si après la fin ou si compte rendu fourni
+        if compte_rendu and hasattr(reunion, 'statut'):
+            try:
+                reunion.statut = 'terminee'
+            except Exception:
+                pass
+        reunion.save()
+        return Response(self.get_serializer(reunion).data)
+
+    def create(self, request, *args, **kwargs):
+        profile = getattr(request.user, 'profile', None)
+        role = getattr(profile, 'role', None)
+        if role not in self.allowed_creator_roles:
+            return Response({'detail': "Vous n'êtes pas autorisé à créer une réunion."}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
     
     @action(detail=True, methods=['post'])
     def marquer_presence(self, request, pk=None):
