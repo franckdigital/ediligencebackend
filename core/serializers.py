@@ -761,7 +761,12 @@ class CourrierImputationSerializer(serializers.ModelSerializer):
             'id': obj.courrier.id,
             'reference': obj.courrier.reference,
             'objet': obj.courrier.objet,
-            'type_courrier': obj.courrier.type_courrier
+            'expediteur': obj.courrier.expediteur,
+            'destinataire': obj.courrier.destinataire,
+            'type_courrier': obj.courrier.type_courrier,
+            'sens': obj.courrier.sens,
+            'date_reception': obj.courrier.date_reception,
+            'categorie': obj.courrier.categorie
         }
 
     def get_fichier_joint_url(self, obj):

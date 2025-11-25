@@ -12,6 +12,8 @@ from .views import (
     DiligenceDownloadFichierView, OccurrenceSpecialeViewSet
 )
 from .views_courrier_access import CourrierAccessViewSet
+from .views_courrier_stats import CourrierStatsViewSet
+from .views_courrier_notifications import CourrierNotificationViewSet
 from .views_ import UserManagementViewSet, NotificationViewSet, UserRegistrationView
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
@@ -31,6 +33,8 @@ router.register(r'services', ServiceViewSet)
 router.register(r'courriers', CourrierViewSet)
 router.register(r'courrier-access', CourrierAccessViewSet)
 router.register(r'courrier-imputation', CourrierImputationViewSet, basename='courrier-imputation')
+router.register(r'courrier-stats', CourrierStatsViewSet, basename='courrier-stats')
+router.register(r'courrier-notifications', CourrierNotificationViewSet, basename='courrier-notifications')
 router.register(r'diligences', DiligenceViewSet)
 router.register(r'imputation-files', ImputationFileViewSet)
 router.register(r'imputation-access', ImputationAccessViewSet)

@@ -724,23 +724,25 @@ class CourrierViewSet(viewsets.ModelViewSet):
             if user.profile.role in ['ADMIN']:
                 return queryset.order_by('-created_at')
             
-            # Pour les courriers confidentiels, vérifier les permissions d'accès ET les imputations
+            # Récupérer tous les courriers avec imputation pour cet utilisateur
+            imputation_ids = CourrierImputation.objects.filter(
+                user=user
+            ).values_list('courrier_id', flat=True)
+            
+            # Pour les courriers confidentiels, vérifier aussi les permissions d'accès
             accessible_confidential_ids = CourrierAccess.objects.filter(
                 user=user
             ).values_list('courrier_id', flat=True)
             
-            # Ajouter les courriers confidentiels avec imputation
-            imputation_confidential_ids = CourrierImputation.objects.filter(
-                user=user
-            ).values_list('courrier_id', flat=True)
+            # Combiner les IDs des courriers confidentiels accessibles
+            all_confidential_accessible_ids = list(set(list(accessible_confidential_ids) + [id for id in imputation_ids]))
             
-            # Combiner les deux listes d'IDs
-            all_accessible_ids = list(accessible_confidential_ids) + list(imputation_confidential_ids)
-            
-            # Filtrer : courriers ordinaires + courriers confidentiels avec accès ou imputation
+            # Filtrer : 
+            # - Tous les courriers ordinaires (avec ou sans imputation)
+            # - Courriers confidentiels avec accès ou imputation
             queryset = queryset.filter(
                 models.Q(type_courrier='ordinaire') |
-                models.Q(type_courrier='confidentiel', id__in=all_accessible_ids)
+                models.Q(type_courrier='confidentiel', id__in=all_confidential_accessible_ids)
             )
         else:
             # Si pas de profil, seulement les courriers ordinaires
@@ -800,7 +802,7 @@ class CourrierViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def imputer_courrier(self, request, pk=None):
-        """Imputer un courrier confidentiel à un utilisateur - seuls ADMIN et DIRECTEUR"""
+        """Imputer un courrier (ordinaire ou confidentiel) à un utilisateur - seuls ADMIN et DIRECTEUR"""
         user = request.user
         
         # Vérifier les permissions
@@ -811,13 +813,6 @@ class CourrierViewSet(viewsets.ModelViewSet):
             )
         
         courrier = self.get_object()
-        
-        # Vérifier que c'est un courrier confidentiel
-        if courrier.type_courrier != 'confidentiel':
-            return Response(
-                {'error': 'Seuls les courriers confidentiels peuvent être imputés'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
         
         user_id = request.data.get('user_id')
         access_type = request.data.get('access_type', 'view')
@@ -848,10 +843,48 @@ class CourrierViewSet(viewsets.ModelViewSet):
             imputation.granted_by = user
             imputation.save()
         
+        courrier_type = 'confidentiel' if courrier.type_courrier == 'confidentiel' else 'ordinaire'
         return Response({
-            'message': f'Courrier imputé avec succès à {target_user.get_full_name() or target_user.username}',
-            'imputation_id': imputation.id
+            'message': f'Courrier {courrier_type} imputé avec succès à {target_user.get_full_name() or target_user.username}',
+            'imputation_id': imputation.id,
+            'courrier_type': courrier.type_courrier,
+            'sens': courrier.sens
         }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def imputations(self, request, pk=None):
+        """Lister toutes les imputations d'un courrier"""
+        courrier = self.get_object()
+        imputations = CourrierImputation.objects.filter(courrier=courrier).select_related('user', 'granted_by')
+        serializer = CourrierImputationSerializer(imputations, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['delete'], permission_classes=[permissions.IsAuthenticated], url_path='imputations/(?P<imputation_id>[^/.]+)')
+    def delete_imputation(self, request, pk=None, imputation_id=None):
+        """Supprimer une imputation spécifique d'un courrier - seuls ADMIN et DIRECTEUR"""
+        user = request.user
+        
+        # Vérifier les permissions
+        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']):
+            return Response(
+                {'error': 'Seuls les administrateurs et directeurs peuvent supprimer des imputations'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        courrier = self.get_object()
+        
+        try:
+            imputation = CourrierImputation.objects.get(id=imputation_id, courrier=courrier)
+            imputation.delete()
+            return Response(
+                {'message': 'Imputation supprimée avec succès'}, 
+                status=status.HTTP_200_OK
+            )
+        except CourrierImputation.DoesNotExist:
+            return Response(
+                {'error': 'Imputation non trouvée'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     def create(self, request, *args, **kwargs):
         print('\nRequest data:', dict(request.data))
@@ -2026,20 +2059,48 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
 
 
 class CourrierImputationViewSet(viewsets.ModelViewSet):
-    """ViewSet pour gérer les imputations des courriers confidentiels"""
+    """ViewSet pour gérer les imputations des courriers (ordinaires et confidentiels)"""
     serializer_class = CourrierImputationSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
         user = self.request.user
+        queryset = CourrierImputation.objects.select_related('courrier', 'user', 'granted_by')
         
-        # Seuls les ADMIN et DIRECTEUR peuvent voir les imputations
+        # Seuls les ADMIN et DIRECTEUR peuvent voir toutes les imputations
         if hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']:
-            return CourrierImputation.objects.select_related('courrier', 'user', 'granted_by').all()
+            queryset = queryset.all()
+        else:
+            # Les autres utilisateurs ne voient que leurs propres imputations
+            queryset = queryset.filter(user=user)
         
-        # Les autres utilisateurs ne voient que leurs propres imputations
-        return CourrierImputation.objects.filter(user=user).select_related('courrier', 'user', 'granted_by')
+        # Filtrage par courrier
+        courrier_id = self.request.query_params.get('courrier')
+        if courrier_id:
+            queryset = queryset.filter(courrier_id=courrier_id)
+        
+        # Filtrage par type de courrier (ordinaire/confidentiel)
+        type_courrier = self.request.query_params.get('type_courrier')
+        if type_courrier:
+            queryset = queryset.filter(courrier__type_courrier=type_courrier)
+        
+        # Filtrage par sens (arrivée/départ)
+        sens = self.request.query_params.get('sens')
+        if sens:
+            queryset = queryset.filter(courrier__sens=sens)
+        
+        # Filtrage par utilisateur imputé
+        user_id = self.request.query_params.get('user')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        # Filtrage par type d'accès (view/edit)
+        access_type = self.request.query_params.get('access_type')
+        if access_type:
+            queryset = queryset.filter(access_type=access_type)
+        
+        return queryset
 
     def create(self, request, *args, **kwargs):
         """Créer une imputation - seuls ADMIN et DIRECTEUR peuvent le faire"""

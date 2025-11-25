@@ -247,7 +247,7 @@ class CourrierAccess(models.Model):
         return f"Accès {self.courrier.reference} pour {self.user.username}"
 
 class CourrierImputation(models.Model):
-    """Modèle pour l'imputation des courriers confidentiels basé sur ImputationAccess"""
+    """Modèle pour l'imputation des courriers (ordinaires et confidentiels)"""
     ACCESS_TYPE_CHOICES = [
         ('view', 'Lecture'),
         ('edit', 'Édition'),
@@ -265,6 +265,100 @@ class CourrierImputation(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.courrier.reference} ({self.access_type})"
+
+class CourrierStatut(models.Model):
+    """Modèle pour suivre le statut et l'historique des courriers"""
+    STATUT_CHOICES = [
+        ('nouveau', 'Nouveau'),
+        ('en_cours', 'En cours de traitement'),
+        ('traite', 'Traité'),
+        ('archive', 'Archivé'),
+    ]
+    
+    courrier = models.ForeignKey(Courrier, on_delete=models.CASCADE, related_name='historique_statuts')
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='nouveau')
+    commentaire = models.TextField(blank=True, null=True)
+    modifie_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='modifications_courrier')
+    date_modification = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Statut Courrier'
+        verbose_name_plural = 'Statuts Courriers'
+        ordering = ['-date_modification']
+    
+    def __str__(self):
+        return f"{self.courrier.reference} - {self.statut} ({self.date_modification.strftime('%d/%m/%Y')})"
+
+class CourrierRappel(models.Model):
+    """Modèle pour les rappels de traitement des courriers"""
+    courrier = models.ForeignKey(Courrier, on_delete=models.CASCADE, related_name='rappels')
+    utilisateur = models.ForeignKey(User, on_delete=models.CASCADE, related_name='rappels_courrier')
+    date_rappel = models.DateTimeField()
+    message = models.TextField()
+    envoye = models.BooleanField(default=False)
+    date_envoi = models.DateTimeField(null=True, blank=True)
+    cree_par = models.ForeignKey(User, on_delete=models.CASCADE, related_name='rappels_crees')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Rappel Courrier'
+        verbose_name_plural = 'Rappels Courriers'
+        ordering = ['date_rappel']
+    
+    def __str__(self):
+        return f"Rappel pour {self.courrier.reference} - {self.utilisateur.username}"
+
+class CourrierNotification(models.Model):
+    """Modèle pour les notifications liées aux courriers"""
+    TYPE_CHOICES = [
+        ('nouveau_courrier', 'Nouveau courrier reçu'),
+        ('courrier_impute', 'Courrier imputé'),
+        ('acces_accorde', 'Accès accordé'),
+        ('acces_revoque', 'Accès révoqué'),
+        ('rappel_traitement', 'Rappel de traitement'),
+        ('statut_modifie', 'Statut modifié'),
+        ('diligence_creee', 'Diligence créée'),
+        ('commentaire_ajoute', 'Commentaire ajouté'),
+    ]
+    
+    PRIORITE_CHOICES = [
+        ('basse', 'Basse'),
+        ('normale', 'Normale'),
+        ('haute', 'Haute'),
+        ('urgente', 'Urgente'),
+    ]
+    
+    utilisateur = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications_courrier')
+    courrier = models.ForeignKey(Courrier, on_delete=models.CASCADE, related_name='notifications', null=True, blank=True)
+    type_notification = models.CharField(max_length=30, choices=TYPE_CHOICES)
+    titre = models.CharField(max_length=255)
+    message = models.TextField()
+    priorite = models.CharField(max_length=20, choices=PRIORITE_CHOICES, default='normale')
+    lue = models.BooleanField(default=False)
+    date_lecture = models.DateTimeField(null=True, blank=True)
+    cree_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications_courrier_creees')
+    created_at = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(default=dict, blank=True)  # Données supplémentaires (IDs, références, etc.)
+    
+    class Meta:
+        verbose_name = 'Notification Courrier'
+        verbose_name_plural = 'Notifications Courriers'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['utilisateur', 'lue']),
+            models.Index(fields=['courrier']),
+            models.Index(fields=['-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.titre} - {self.utilisateur.username}"
+    
+    def marquer_comme_lue(self):
+        """Marquer la notification comme lue"""
+        from django.utils import timezone
+        self.lue = True
+        self.date_lecture = timezone.now()
+        self.save()
 
 class Diligence(models.Model):
     TYPE_CHOICES = [
