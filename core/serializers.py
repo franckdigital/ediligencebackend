@@ -559,11 +559,17 @@ class ServiceSerializer(serializers.ModelSerializer):
 class CourrierSerializer(serializers.ModelSerializer):
     service_details = serializers.SerializerMethodField()
     fichier_joint_url = serializers.SerializerMethodField()
+    imputation_access = serializers.SerializerMethodField()
+    access_granted = serializers.SerializerMethodField()
+    diligence = serializers.SerializerMethodField()
+    diligence_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Courrier
         fields = ['id', 'reference', 'expediteur', 'destinataire', 'objet', 'date_reception', 
-                 'service', 'service_details', 'categorie', 'type_courrier', 'sens', 'fichier_joint', 'fichier_joint_url', 'created_at', 'updated_at']
+                 'service', 'service_details', 'categorie', 'type_courrier', 'sens', 'statut', 'date_traitement',
+                 'fichier_joint', 'fichier_joint_url', 'imputation_access', 'access_granted', 
+                 'diligence', 'diligence_id', 'created_at', 'updated_at']
         extra_kwargs = {
             'reference': {'required': True},
             'expediteur': {'required': True},
@@ -592,6 +598,55 @@ class CourrierSerializer(serializers.ModelSerializer):
                 'direction_nom': service.direction.nom if service.direction else None
             }
         return None
+    
+    def get_imputation_access(self, obj):
+        """Retourne la liste des imputations pour ce courrier"""
+        from .models import CourrierImputation
+        imputations = CourrierImputation.objects.filter(courrier=obj).select_related('user')
+        return [{
+            'id': imp.id,
+            'user': {
+                'id': imp.user.id,
+                'username': imp.user.username,
+                'first_name': imp.user.first_name,
+                'last_name': imp.user.last_name
+            },
+            'access_type': imp.access_type,
+            'granted_at': imp.granted_at
+        } for imp in imputations]
+    
+    def get_access_granted(self, obj):
+        """Retourne la liste des accès accordés pour les courriers confidentiels"""
+        from .models import CourrierAccess
+        accesses = CourrierAccess.objects.filter(courrier=obj).select_related('user')
+        return [{
+            'id': acc.id,
+            'user': {
+                'id': acc.user.id,
+                'username': acc.user.username,
+                'first_name': acc.user.first_name,
+                'last_name': acc.user.last_name
+            },
+            'granted_at': acc.granted_at
+        } for acc in accesses]
+    
+    def get_diligence(self, obj):
+        """Vérifie si le courrier est lié à une diligence"""
+        from .models import Diligence
+        diligence = Diligence.objects.filter(courrier=obj).first()
+        if diligence:
+            return {
+                'id': diligence.id,
+                'titre': diligence.titre,
+                'statut': diligence.statut
+            }
+        return None
+    
+    def get_diligence_id(self, obj):
+        """Retourne l'ID de la diligence si elle existe"""
+        from .models import Diligence
+        diligence = Diligence.objects.filter(courrier=obj).first()
+        return diligence.id if diligence else None
 
     def create(self, validated_data):
         try:

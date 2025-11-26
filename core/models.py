@@ -215,6 +215,15 @@ class Courrier(models.Model):
         ('Autre', 'Autre'),
     ]
 
+    STATUT_CHOICES = [
+        ('nouveau', 'Nouveau'),
+        ('en_attente', 'En Attente'),
+        ('en_cours', 'En Cours'),
+        ('traite', 'Traité'),
+        ('termine', 'Terminé'),
+        ('archive', 'Archivé'),
+    ]
+
     reference = models.CharField(max_length=255, unique=True)
     expediteur = models.CharField(max_length=255)
     destinataire = models.CharField(max_length=255, null=True, blank=True)
@@ -224,6 +233,8 @@ class Courrier(models.Model):
     categorie = models.CharField(max_length=64, choices=CATEGORIE_CHOICES, default='Demande')
     type_courrier = models.CharField(max_length=20, choices=TYPE_CHOICES, default='ordinaire')
     sens = models.CharField(max_length=20, choices=SENS_CHOICES, default='arrivee')
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='nouveau')
+    date_traitement = models.DateField(null=True, blank=True)
     fichier_joint = models.FileField(upload_to='courriers/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
