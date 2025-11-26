@@ -184,15 +184,16 @@ class CourrierStatsViewSet(viewsets.ViewSet):
         ).count()
 
         # Historique des accès récents
+        # CourrierAccess ne possède pas created_at, mais granted_at
         historique_acces = CourrierAccess.objects.filter(
             courrier__type_courrier='confidentiel'
-        ).select_related('user', 'granted_by', 'courrier').order_by('-created_at')[:20]
+        ).select_related('user', 'granted_by', 'courrier').order_by('-granted_at')[:20]
 
         historique_data = [{
             'courrier_reference': acces.courrier.reference,
             'utilisateur': f"{acces.user.first_name} {acces.user.last_name}",
             'accorde_par': f"{acces.granted_by.first_name} {acces.granted_by.last_name}",
-            'date': acces.created_at.strftime('%d/%m/%Y %H:%M'),
+            'date': acces.granted_at.strftime('%d/%m/%Y %H:%M') if acces.granted_at else None,
             'access_type': acces.access_type
         } for acces in historique_acces]
 
