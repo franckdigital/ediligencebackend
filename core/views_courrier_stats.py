@@ -245,13 +245,13 @@ class CourrierStatsViewSet(viewsets.ViewSet):
         # Courriers confidentiels accessibles
         acces_confidentiels = CourrierAccess.objects.filter(user=utilisateur).count()
 
-        # Diligences créées par l'utilisateur
-        diligences_creees = Diligence.objects.filter(created_by=utilisateur).count()
+        # Diligences liées à l'utilisateur
+        # Le modèle Diligence ne possède pas de champs created_by ni responsable,
+        # on se base donc uniquement sur la relation agents
+        diligences_creees = Diligence.objects.filter(agents=utilisateur).distinct().count()
 
-        # Diligences assignées à l'utilisateur
-        diligences_assignees = Diligence.objects.filter(
-            Q(responsable=utilisateur) | Q(agents=utilisateur)
-        ).distinct().count()
+        # Diligences assignées à l'utilisateur (même logique : via agents)
+        diligences_assignees = Diligence.objects.filter(agents=utilisateur).distinct().count()
 
         # Courriers en attente d'imputation (pour ADMIN/DIRECTEUR)
         courriers_en_attente = 0
@@ -263,7 +263,7 @@ class CourrierStatsViewSet(viewsets.ViewSet):
 
         # Performance de traitement
         diligences_terminees = Diligence.objects.filter(
-            responsable=utilisateur,
+            agents=utilisateur,
             statut='termine'
         )
         
