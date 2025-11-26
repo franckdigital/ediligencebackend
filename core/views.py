@@ -724,26 +724,28 @@ class CourrierViewSet(viewsets.ModelViewSet):
             if user.profile.role in ['ADMIN', 'SECRETAIRE']:
                 return queryset.order_by('-created_at')
             
+            # Pour tous les autres rôles (DIRECTEUR, SUPERIEUR, CHEF_SERVICE, AGENT)
             # Récupérer tous les courriers avec imputation pour cet utilisateur
             imputation_ids = CourrierImputation.objects.filter(
                 user=user
             ).values_list('courrier_id', flat=True)
             
-            # Pour les courriers confidentiels, vérifier aussi les permissions d'accès
+            # Pour les courriers confidentiels, vérifier aussi les permissions d'accès explicites
             accessible_confidential_ids = CourrierAccess.objects.filter(
                 user=user
             ).values_list('courrier_id', flat=True)
             
-            # Combiner les IDs des courriers confidentiels accessibles
-            all_confidential_accessible_ids = list(set(list(accessible_confidential_ids) + [id for id in imputation_ids]))
+            # Combiner les IDs de tous les courriers accessibles (ordinaires et confidentiels)
+            all_accessible_ids = list(set(list(accessible_confidential_ids) + list(imputation_ids)))
             
             # Filtrer : 
-            # - Tous les courriers ordinaires (avec ou sans imputation)
-            # - Courriers confidentiels avec accès ou imputation
-            queryset = queryset.filter(
-                models.Q(type_courrier='ordinaire') |
-                models.Q(type_courrier='confidentiel', id__in=all_confidential_accessible_ids)
-            )
+            # - Seulement les courriers qui ont été imputés à l'utilisateur (ordinaires ou confidentiels)
+            # - OU les courriers confidentiels avec accès explicite (CourrierAccess)
+            # Si aucun courrier n'est accessible, retourner un queryset vide
+            if all_accessible_ids:
+                queryset = queryset.filter(id__in=all_accessible_ids)
+            else:
+                queryset = queryset.none()  # Aucun courrier accessible
         else:
             # Si pas de profil, seulement les courriers ordinaires
             queryset = queryset.filter(type_courrier='ordinaire')
