@@ -868,9 +868,28 @@ class CourrierViewSet(viewsets.ModelViewSet):
         
         courrier = self.get_object()
         activer = request.data.get('activer', not courrier.rappel_traitement)
+        ancien_etat = courrier.rappel_traitement
         
         courrier.rappel_traitement = activer
         courrier.save()
+        
+        # Créer une notification si le rappel est activé (et qu'il était désactivé avant)
+        if activer and not ancien_etat:
+            try:
+                from .models import CourrierNotification
+                # Notifier tous les utilisateurs imputés sur ce courrier
+                imputations = CourrierImputation.objects.filter(courrier=courrier).select_related('user')
+                for imp in imputations:
+                    CourrierNotification.objects.create(
+                        utilisateur=imp.user,
+                        courrier=courrier,
+                        type_notification='rappel_traitement',
+                        titre=f'Rappel de traitement activé - {courrier.reference}',
+                        message=f'Un rappel de traitement a été activé pour le courrier {courrier.reference} par {user.get_full_name() or user.username}. Veuillez traiter ce courrier dans les meilleurs délais.',
+                        priorite='haute'
+                    )
+            except Exception as e:
+                print(f'Erreur lors de la création de la notification de rappel: {e}')
         
         return Response({
             'message': f'Rappel de traitement {"activé" if activer else "désactivé"} avec succès',
