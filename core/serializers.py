@@ -638,7 +638,9 @@ class CourrierSerializer(serializers.ModelSerializer):
         if diligence:
             return {
                 'id': diligence.id,
-                'titre': diligence.titre,
+                # Utiliser des champs existants sur le modèle Diligence
+                # reference_courrier comme titre principal, avec objet en complément éventuel
+                'titre': diligence.reference_courrier,
                 'statut': diligence.statut
             }
         return None
