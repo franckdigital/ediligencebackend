@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0098_auto_20241125_2300'),  # Ajustez selon votre dernière migration
+        ('core', '0043_courrierrappel_courrierstatut_courriernotification'),  # Ajustez selon votre dernière migration
     ]
 
     operations = [
