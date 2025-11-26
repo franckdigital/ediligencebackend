@@ -612,7 +612,8 @@ class CourrierSerializer(serializers.ModelSerializer):
                 'last_name': imp.user.last_name
             },
             'access_type': imp.access_type,
-            'granted_at': imp.granted_at
+            # Utiliser created_at comme date d'octroi de l'imputation
+            'granted_at': imp.created_at
         } for imp in imputations]
     
     def get_access_granted(self, obj):
