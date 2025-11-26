@@ -568,7 +568,7 @@ class CourrierSerializer(serializers.ModelSerializer):
         model = Courrier
         fields = ['id', 'reference', 'expediteur', 'destinataire', 'objet', 'date_reception', 
                  'service', 'service_details', 'categorie', 'type_courrier', 'sens', 'statut', 'date_traitement',
-                 'fichier_joint', 'fichier_joint_url', 'imputation_access', 'access_granted', 
+                 'fichier_joint', 'fichier_joint_url', 'rappel_traitement', 'imputation_access', 'access_granted', 
                  'diligence', 'diligence_id', 'created_at', 'updated_at']
         extra_kwargs = {
             'reference': {'required': True},

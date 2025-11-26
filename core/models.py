@@ -236,6 +236,7 @@ class Courrier(models.Model):
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='nouveau')
     date_traitement = models.DateField(null=True, blank=True)
     fichier_joint = models.FileField(upload_to='courriers/', null=True, blank=True)
+    rappel_traitement = models.BooleanField(default=False, help_text="Activer les rappels automatiques de traitement")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

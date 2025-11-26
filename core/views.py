@@ -720,8 +720,8 @@ class CourrierViewSet(viewsets.ModelViewSet):
         
         # Filtrage selon le type de courrier et les permissions
         if hasattr(user, 'profile'):
-            # Les ADMIN peuvent voir tous les courriers
-            if user.profile.role in ['ADMIN']:
+            # Les ADMIN et SECRETAIRE peuvent voir tous les courriers
+            if user.profile.role in ['ADMIN', 'SECRETAIRE']:
                 return queryset.order_by('-created_at')
             
             # Récupérer tous les courriers avec imputation pour cet utilisateur
@@ -801,14 +801,89 @@ class CourrierViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def changer_statut(self, request, pk=None):
+        """Changer le statut d'un courrier - accessible à tous les rôles"""
+        courrier = self.get_object()
+        nouveau_statut = request.data.get('statut')
+        
+        if not nouveau_statut:
+            return Response(
+                {'error': 'Le champ statut est requis'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Vérifier que le statut est valide
+        statuts_valides = [choice[0] for choice in Courrier.STATUT_CHOICES]
+        if nouveau_statut not in statuts_valides:
+            return Response(
+                {'error': f'Statut invalide. Valeurs possibles: {", ".join(statuts_valides)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        ancien_statut = courrier.statut
+        courrier.statut = nouveau_statut
+        
+        # Si le statut est "traite" ou "termine", définir la date de traitement
+        if nouveau_statut in ['traite', 'termine'] and not courrier.date_traitement:
+            courrier.date_traitement = timezone.now().date()
+        
+        courrier.save()
+        
+        # Créer une notification pour le changement de statut
+        try:
+            from .models import CourrierNotification
+            # Notifier les utilisateurs imputés
+            imputations = CourrierImputation.objects.filter(courrier=courrier).select_related('user')
+            for imp in imputations:
+                CourrierNotification.objects.create(
+                    utilisateur=imp.user,
+                    courrier=courrier,
+                    type_notification='statut_modifie',
+                    titre=f'Statut du courrier {courrier.reference} modifié',
+                    message=f'Le statut du courrier {courrier.reference} est passé de "{ancien_statut}" à "{nouveau_statut}" par {request.user.get_full_name() or request.user.username}',
+                    priorite='normale'
+                )
+        except Exception as e:
+            print(f'Erreur lors de la création de la notification de changement de statut: {e}')
+        
+        return Response({
+            'message': 'Statut modifié avec succès',
+            'ancien_statut': ancien_statut,
+            'nouveau_statut': nouveau_statut
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def toggle_rappel_traitement(self, request, pk=None):
+        """Activer/désactiver le rappel de traitement - accessible à tous sauf AGENT"""
+        user = request.user
+        
+        # Vérifier les permissions (tous sauf AGENT)
+        if hasattr(user, 'profile') and user.profile.role == 'AGENT':
+            return Response(
+                {'error': 'Les agents ne peuvent pas activer/désactiver les rappels de traitement'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        courrier = self.get_object()
+        activer = request.data.get('activer', not courrier.rappel_traitement)
+        
+        courrier.rappel_traitement = activer
+        courrier.save()
+        
+        return Response({
+            'message': f'Rappel de traitement {"activé" if activer else "désactivé"} avec succès',
+            'rappel_traitement': courrier.rappel_traitement
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def imputer_courrier(self, request, pk=None):
-        """Imputer un courrier (ordinaire ou confidentiel) à un utilisateur - seuls ADMIN et DIRECTEUR"""
+        """Imputer un courrier (ordinaire ou confidentiel) à un utilisateur - ADMIN, SECRETAIRE et DIRECTEUR"""
         user = request.user
         
         # Vérifier les permissions
-        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']):
+        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'SECRETAIRE', 'DIRECTEUR']):
             return Response(
-                {'error': 'Seuls les administrateurs et directeurs peuvent imputer des courriers'}, 
+                {'error': 'Seuls les administrateurs, secrétaires et directeurs peuvent imputer des courriers'}, 
                 status=status.HTTP_403_FORBIDDEN
             )
         
@@ -861,13 +936,13 @@ class CourrierViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['delete'], permission_classes=[permissions.IsAuthenticated], url_path='imputations/(?P<imputation_id>[^/.]+)')
     def delete_imputation(self, request, pk=None, imputation_id=None):
-        """Supprimer une imputation spécifique d'un courrier - seuls ADMIN et DIRECTEUR"""
+        """Supprimer une imputation spécifique d'un courrier - ADMIN, SECRETAIRE et DIRECTEUR"""
         user = request.user
         
         # Vérifier les permissions
-        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']):
+        if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'SECRETAIRE', 'DIRECTEUR']):
             return Response(
-                {'error': 'Seuls les administrateurs et directeurs peuvent supprimer des imputations'}, 
+                {'error': 'Seuls les administrateurs, secrétaires et directeurs peuvent supprimer des imputations'}, 
                 status=status.HTTP_403_FORBIDDEN
             )
         
