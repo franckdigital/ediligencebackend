@@ -831,14 +831,34 @@ class CourrierViewSet(viewsets.ModelViewSet):
         
         courrier.save()
         
-        # Créer une notification pour le changement de statut
+        # Créer des notifications pour le changement de statut
         try:
             from .models import CourrierNotification
-            # Notifier les utilisateurs imputés
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            # Liste des utilisateurs à notifier
+            users_to_notify = set()
+            
+            # 1. Notifier les utilisateurs imputés (sauf celui qui fait le changement)
             imputations = CourrierImputation.objects.filter(courrier=courrier).select_related('user')
             for imp in imputations:
+                if imp.user.id != request.user.id:  # Ne pas se notifier soi-même
+                    users_to_notify.add(imp.user)
+            
+            # 2. Notifier les rôles de supervision (ADMIN, DIRECTEUR, SUPERIEUR, CHEF_SERVICE, SECRETAIRE)
+            supervision_roles = ['ADMIN', 'DIRECTEUR', 'SUPERIEUR', 'CHEF_SERVICE', 'SECRETAIRE']
+            supervisors = User.objects.filter(
+                profile__role__in=supervision_roles
+            ).exclude(id=request.user.id)  # Ne pas se notifier soi-même
+            
+            for supervisor in supervisors:
+                users_to_notify.add(supervisor)
+            
+            # Créer les notifications pour tous les utilisateurs concernés
+            for user in users_to_notify:
                 CourrierNotification.objects.create(
-                    utilisateur=imp.user,
+                    utilisateur=user,
                     courrier=courrier,
                     type_notification='statut_modifie',
                     titre=f'Statut du courrier {courrier.reference} modifié',
