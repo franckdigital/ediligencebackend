@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.env/Scripts/python.exe manage.py migrate --skip-checks)",
+      "Bash(.env/Scripts/python.exe manage.py check)",
+      "Bash(.env/Scripts/pip.exe show *)",
+      "Bash(curl -s -I -X OPTIONS http://localhost:8000/api/auth/me/ -H 'Origin: http://localhost:3000' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,content-type')"
+    ]
+  }
+}
