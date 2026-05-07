@@ -20,6 +20,11 @@ from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationView
 from .geofencing_views import GeofenceAlertViewSet, GeofenceSettingsViewSet, AgentLocationViewSet, PushNotificationTokenViewSet
 from .device_locking_views import CheckDeviceLockView, LockDeviceView, UnlockDeviceView, DeviceLockViewSet
 from .agenda_views import RendezVousViewSet, RendezVousDocumentViewSet, ReunionViewSet, ReunionPresenceViewSet
+from .ged_views import (
+    CategorieDocumentViewSet, DocumentViewSet, DocumentLogViewSet,
+    ged_courriers_disponibles, ged_diligences_disponibles,
+    ged_reunions_disponibles, ged_taches_disponibles,
+)
 from django.urls import path, include
 from core.views_stats import PresenceStatsAPIView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
@@ -77,6 +82,11 @@ router.register(r'agent-locations', AgentLocationViewSet, basename='agent-locati
 router.register(r'push-tokens', PushNotificationTokenViewSet, basename='push-tokens')
 router.register(r'device-locks', DeviceLockViewSet, basename='device-locks')
 
+# --- ROUTES GED & ARCHIVAGE ---
+router.register(r'ged/categories', CategorieDocumentViewSet, basename='ged-categories')
+router.register(r'ged/documents', DocumentViewSet, basename='ged-documents')
+router.register(r'ged/logs', DocumentLogViewSet, basename='ged-logs')
+
 # --- ROUTES AGENDA ---
 router.register(r'rendezvous', RendezVousViewSet, basename='rendezvous')
 router.register(r'rendezvous-documents', RendezVousDocumentViewSet, basename='rendezvous-documents')
@@ -93,6 +103,10 @@ urlpatterns = [
     path('presence/<int:presence_id>/update-status/', UpdatePresenceStatusView.as_view(), name='update-presence-status'),
     path('stats/presence/', PresenceStatsAPIView.as_view(), name='presence-stats'),
     path('', include(router.urls)),
+    path('ged/courriers-disponibles/', ged_courriers_disponibles, name='ged-courriers-disponibles'),
+    path('ged/diligences-disponibles/', ged_diligences_disponibles, name='ged-diligences-disponibles'),
+    path('ged/reunions-disponibles/', ged_reunions_disponibles, name='ged-reunions-disponibles'),
+    path('ged/taches-disponibles/', ged_taches_disponibles, name='ged-taches-disponibles'),
     path('auth/register/', AgentRegistrationView.as_view(), name='register'),
     path('auth/register/admin/', AdminRegistrationView.as_view(), name='register_admin'),
     path('auth/login/', LoginView.as_view(), name='login'),

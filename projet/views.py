@@ -104,7 +104,10 @@ class ProjetViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         role = _get_role(user)
-        qs = Projet.objects.select_related('responsable', 'direction', 'service', 'created_by')
+        qs = Projet.objects.select_related(
+            'responsable', 'responsable__profile', 'responsable__profile__service',
+            'direction', 'service', 'created_by',
+        )
 
         # Filtres par rôle
         if role == 'ADMIN':
@@ -140,6 +143,10 @@ class ProjetViewSet(viewsets.ModelViewSet):
         direction_id = self.request.query_params.get('direction')
         if direction_id:
             qs = qs.filter(direction_id=direction_id)
+
+        service_id = self.request.query_params.get('service')
+        if service_id:
+            qs = qs.filter(service_id=service_id)
 
         search = self.request.query_params.get('search')
         if search:

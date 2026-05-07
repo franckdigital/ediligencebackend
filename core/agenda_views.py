@@ -32,8 +32,8 @@ class RendezVousViewSet(viewsets.ModelViewSet):
     search_fields = ['objet', 'lieu', 'visiteur_nom', 'visiteur_prenoms', 'visiteur_structure']
     ordering_fields = ['date_debut', 'date_fin', 'created_at']
     ordering = ['-date_debut']
-    allowed_creator_roles = {'ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE'}
-    
+    allowed_creator_roles = {'ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE', 'AGENT'}
+
     def get_queryset(self):
         """
         Filtrer les rendez-vous selon le rôle de l'utilisateur
@@ -150,8 +150,8 @@ class RendezVousViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def superieurs(self, request):
-        """Retourne la liste des utilisateurs ayant un rôle supérieur (DIRECTEUR, SOUS_DIRECTEUR, CHEF_SERVICE, SUPERIEUR)"""
-        roles = ['DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR']
+        """Retourne tous les utilisateurs pouvant être responsable d'un rendez-vous"""
+        roles = ['ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE']
         users = UserProfile.objects.filter(role__in=roles).select_related('user')
         data = [
             {
@@ -165,9 +165,6 @@ class RendezVousViewSet(viewsets.ModelViewSet):
             for up in users
         ]
         return Response(data)
-        
-        serializer = self.get_serializer(rendezvous, many=True)
-        return Response(serializer.data)
 
 
 class RendezVousDocumentViewSet(viewsets.ModelViewSet):
@@ -198,8 +195,8 @@ class ReunionViewSet(viewsets.ModelViewSet):
     search_fields = ['intitule', 'description', 'lieu']
     ordering_fields = ['date_debut', 'date_fin', 'created_at']
     ordering = ['-date_debut']
-    allowed_creator_roles = {'ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE'}
-    
+    allowed_creator_roles = {'ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE', 'AGENT'}
+
     def get_queryset(self):
         """
         Filtrer les réunions selon le rôle de l'utilisateur

@@ -226,6 +226,7 @@ class TacheGanttSerializer(serializers.ModelSerializer):
 class ProjetListSerializer(serializers.ModelSerializer):
     """Serializer léger pour les listes de projets."""
     responsable_detail = UserMinimalSerializer(source='responsable', read_only=True)
+    service_nom = serializers.SerializerMethodField()
     est_en_retard = serializers.BooleanField(read_only=True)
     nombre_taches = serializers.IntegerField(read_only=True)
     taches_terminees = serializers.IntegerField(read_only=True)
@@ -238,11 +239,21 @@ class ProjetListSerializer(serializers.ModelSerializer):
             'id', 'titre', 'date_debut', 'date_fin_prevue',
             'statut', 'pourcentage_avancement',
             'responsable', 'responsable_detail',
+            'service', 'service_nom',
             'est_en_retard', 'nombre_taches',
             'taches_terminees', 'taches_en_cours', 'taches_a_faire',
             'budget_prevu', 'budget_consomme',
             'created_at',
         ]
+
+    def get_service_nom(self, obj):
+        if obj.service:
+            return obj.service.nom
+        # Fallback : service du responsable
+        profile = getattr(getattr(obj, 'responsable', None), 'profile', None)
+        if profile and profile.service:
+            return profile.service.nom
+        return None
 
 
 class ProjetDetailSerializer(serializers.ModelSerializer):

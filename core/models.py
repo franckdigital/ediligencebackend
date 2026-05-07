@@ -1564,3 +1564,281 @@ class ReunionPresence(models.Model):
     
     def __str__(self):
         return f"{self.participant.username} - {self.reunion.intitule} ({'Présent' if self.present else 'Absent'})"
+
+
+# ============================================================
+# MODULE GED — GESTION ÉLECTRONIQUE DES DOCUMENTS & ARCHIVAGE
+# ============================================================
+
+import hashlib
+
+
+class CategorieDocument(models.Model):
+    nom = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    icone = models.CharField(max_length=50, blank=True, null=True)
+    parent = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='sous_categories'
+    )
+    duree_conservation_ans = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Durée légale de conservation en années (ex: 10)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Catégorie de document'
+        verbose_name_plural = 'Catégories de documents'
+        ordering = ['nom']
+
+    def __str__(self):
+        return self.nom
+
+
+class Document(models.Model):
+    STATUT_CHOICES = [
+        ('brouillon', 'Brouillon'),
+        ('en_validation', 'En validation'),
+        ('valide', 'Validé'),
+        ('signe', 'Signé'),
+        ('diffuse', 'Diffusé'),
+        ('archive', 'Archivé'),
+    ]
+    CONFIDENTIALITE_CHOICES = [
+        ('public', 'Public'),
+        ('interne', 'Interne'),
+        ('confidentiel', 'Confidentiel'),
+    ]
+    TYPE_FICHIER_CHOICES = [
+        ('pdf', 'PDF'),
+        ('word', 'Word'),
+        ('excel', 'Excel'),
+        ('image', 'Image'),
+        ('scan', 'Scan'),
+        ('autre', 'Autre'),
+    ]
+
+    reference = models.CharField(max_length=100, unique=True, blank=True)
+    titre = models.CharField(max_length=500)
+    description = models.TextField(blank=True, null=True)
+    categorie = models.ForeignKey(
+        CategorieDocument, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='documents'
+    )
+
+    # Fichier
+    fichier = models.FileField(upload_to='ged/documents/%Y/%m/')
+    type_fichier = models.CharField(max_length=20, choices=TYPE_FICHIER_CHOICES, default='pdf')
+    taille_fichier = models.BigIntegerField(default=0, help_text="Taille en octets")
+    nom_fichier_original = models.CharField(max_length=255, blank=True)
+
+    # Métadonnées
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='brouillon')
+    confidentialite = models.CharField(max_length=20, choices=CONFIDENTIALITE_CHOICES, default='interne')
+    mots_cles = models.TextField(blank=True, null=True, help_text="Mots-clés séparés par des virgules")
+    contenu_ocr = models.TextField(blank=True, null=True, help_text="Texte extrait par OCR")
+
+    # Auteur et service
+    auteur = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        related_name='ged_documents_crees'
+    )
+    service = models.ForeignKey(
+        'Service', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ged_documents'
+    )
+
+    # Dates
+    date_document = models.DateField(null=True, blank=True)
+    date_expiration = models.DateField(null=True, blank=True)
+
+    # Versioning
+    version = models.PositiveIntegerField(default=1)
+    est_version_courante = models.BooleanField(default=True)
+    document_original = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='versions_precedentes'
+    )
+
+    # Liens avec autres modules
+    courrier = models.ForeignKey(
+        'Courrier', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='ged_documents'
+    )
+    diligence = models.ForeignKey(
+        'Diligence', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='ged_documents'
+    )
+    reunion = models.ForeignKey(
+        'Reunion', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='ged_documents'
+    )
+    tache = models.ForeignKey(
+        'Tache', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='ged_documents'
+    )
+
+    # Archivage
+    archive_le = models.DateTimeField(null=True, blank=True)
+    archive_par = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='ged_documents_archives'
+    )
+    duree_conservation_ans = models.PositiveIntegerField(null=True, blank=True)
+    date_destruction_prevue = models.DateField(null=True, blank=True)
+
+    # Intégrité
+    hash_sha256 = models.CharField(max_length=64, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Document GED'
+        verbose_name_plural = 'Documents GED'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.reference} — {self.titre}"
+
+    def save(self, *args, **kwargs):
+        # Génère la référence automatiquement
+        if not self.reference:
+            from django.utils import timezone
+            year = timezone.now().year
+            count = Document.objects.filter(created_at__year=year).count() + 1
+            self.reference = f"GED-{year}-{count:05d}"
+        # Calcule le hash SHA256 et la taille à la création
+        if self.fichier and not self.hash_sha256:
+            try:
+                self.fichier.seek(0)
+                sha256 = hashlib.sha256()
+                for chunk in iter(lambda: self.fichier.read(8192), b''):
+                    sha256.update(chunk)
+                self.hash_sha256 = sha256.hexdigest()
+                self.fichier.seek(0)
+                self.taille_fichier = self.fichier.size
+                self.nom_fichier_original = self.fichier.name
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
+
+
+class DocumentVersion(models.Model):
+    """Historique des versions d'un document."""
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name='historique_versions'
+    )
+    numero_version = models.PositiveIntegerField()
+    fichier = models.FileField(upload_to='ged/versions/%Y/%m/')
+    nom_fichier_original = models.CharField(max_length=255, blank=True)
+    hash_sha256 = models.CharField(max_length=64, blank=True)
+    taille_fichier = models.BigIntegerField(default=0)
+    auteur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    commentaire = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Version de document'
+        verbose_name_plural = 'Versions de documents'
+        ordering = ['-numero_version']
+        unique_together = ['document', 'numero_version']
+
+    def __str__(self):
+        return f"{self.document.reference} v{self.numero_version}"
+
+    def save(self, *args, **kwargs):
+        if self.fichier and not self.hash_sha256:
+            try:
+                self.fichier.seek(0)
+                sha256 = hashlib.sha256()
+                for chunk in iter(lambda: self.fichier.read(8192), b''):
+                    sha256.update(chunk)
+                self.hash_sha256 = sha256.hexdigest()
+                self.fichier.seek(0)
+                self.taille_fichier = self.fichier.size
+                self.nom_fichier_original = self.fichier.name
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
+
+
+class DocumentAccess(models.Model):
+    DROIT_CHOICES = [
+        ('lecture', 'Lecture'),
+        ('modification', 'Modification'),
+        ('validation', 'Validation'),
+        ('archivage', 'Archivage'),
+    ]
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name='acces'
+    )
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='ged_acces'
+    )
+    droit = models.CharField(max_length=20, choices=DROIT_CHOICES, default='lecture')
+    accorde_par = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        related_name='ged_acces_accordes'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Accès document'
+        verbose_name_plural = 'Accès documents'
+        unique_together = ['document', 'user', 'droit']
+
+    def __str__(self):
+        return f"{self.user.username} — {self.document.reference} ({self.droit})"
+
+
+class DocumentLog(models.Model):
+    ACTION_CHOICES = [
+        ('creation', 'Création'),
+        ('modification', 'Modification'),
+        ('consultation', 'Consultation'),
+        ('telechargement', 'Téléchargement'),
+        ('validation', 'Validation'),
+        ('archivage', 'Archivage'),
+        ('nouvelle_version', 'Nouvelle version'),
+        ('acces_refuse', 'Accès refusé'),
+    ]
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name='logs'
+    )
+    utilisateur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    details = models.TextField(blank=True, null=True)
+    adresse_ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Journal document'
+        verbose_name_plural = 'Journal documents'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action} — {self.document.reference} par {self.utilisateur}"
+
+
+class CertificatArchivage(models.Model):
+    """Certificat d'intégrité généré lors de l'archivage légal."""
+    document = models.OneToOneField(
+        Document, on_delete=models.CASCADE, related_name='certificat_archivage'
+    )
+    numero_certificat = models.CharField(max_length=50, unique=True)
+    hash_sha256 = models.CharField(max_length=64)
+    horodatage = models.DateTimeField(auto_now_add=True)
+    auteur = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='certificats_emis'
+    )
+    valide = models.BooleanField(default=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Certificat d\'archivage'
+        verbose_name_plural = 'Certificats d\'archivage'
+
+    def __str__(self):
+        return f"Certificat {self.numero_certificat} — {self.document.reference}"
