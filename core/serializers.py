@@ -137,10 +137,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
 # Service déjà importé en haut
 
 class ServiceSerializer(serializers.ModelSerializer):
-    direction_nom = serializers.CharField(source='direction.nom', read_only=True)
+    sous_direction = serializers.PrimaryKeyRelatedField(read_only=True)
+    sous_direction_nom = serializers.CharField(source='sous_direction.nom', read_only=True)
+    direction = serializers.SerializerMethodField()
+
+    def get_direction(self, obj):
+        if obj.sous_direction and obj.sous_direction.direction:
+            return {'id': obj.sous_direction.direction.id, 'nom': obj.sous_direction.direction.nom}
+        return None
+
     class Meta:
         model = Service
-        fields = ['id', 'nom', 'description', 'direction', 'direction_nom']
+        fields = ['id', 'nom', 'description', 'sous_direction', 'sous_direction_nom', 'direction']
 
 class UserSerializer(serializers.ModelSerializer):
     telephone = serializers.CharField(source='profile.telephone', required=False, allow_blank=True)
@@ -148,6 +156,18 @@ class UserSerializer(serializers.ModelSerializer):
     service = serializers.PrimaryKeyRelatedField(
         queryset=Service.objects.all(),
         source='profile.service',
+        allow_null=True,
+        required=False
+    )
+    direction = serializers.PrimaryKeyRelatedField(
+        queryset=Direction.objects.all(),
+        source='profile.direction',
+        allow_null=True,
+        required=False
+    )
+    sous_direction = serializers.PrimaryKeyRelatedField(
+        queryset=SousDirection.objects.all(),
+        source='profile.sous_direction',
         allow_null=True,
         required=False
     )
@@ -159,7 +179,6 @@ class UserSerializer(serializers.ModelSerializer):
     )
     role = serializers.CharField(source='profile.role')
     role_display = serializers.CharField(source='profile.get_role_display', read_only=True)
-    direction = serializers.SerializerMethodField(read_only=True)
     empreinte_hash = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     profile = serializers.SerializerMethodField(read_only=True)
@@ -168,78 +187,61 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'is_active',
-            'role', 'role_display', 'service', 'service_obj', 'direction',
+            'role', 'role_display', 'service', 'service_obj', 'direction', 'sous_direction',
             'matricule', 'empreinte_hash', 'telephone', 'password', 'profile'
         ]
-        read_only_fields = ['id', 'role_display', 'direction', 'empreinte_hash', 'service_obj']
+        read_only_fields = ['id', 'role_display', 'empreinte_hash', 'service_obj']
 
     def get_empreinte_hash(self, obj):
-        # Champ qr_code supprimé, retourne None ou la valeur voulue
         return None
 
-    def get_direction(self, obj):
-        print(f"[DEBUG] get_direction called for user {obj.id}")
-        try:
-            if hasattr(obj, 'profile') and obj.profile and obj.profile.service and obj.profile.service.direction:
-                print(f"[DEBUG] Direction found: {obj.profile.service.direction.id}")
-                return obj.profile.service.direction.id
-        except AttributeError as e:
-            print(f"[DEBUG] AttributeError in get_direction for user {obj.id}: {e}")
-        print(f"[DEBUG] No direction found for user {obj.id}")
-        return None
-    
     def get_profile(self, obj):
-        print(f"[DEBUG] get_profile called for user {obj.id}")
         try:
             if hasattr(obj, 'profile') and obj.profile:
-                print(f"[DEBUG] Profile found for user {obj.id}")
+                profile = obj.profile
                 service_data = None
-                if obj.profile.service:
-                    direction_data = None
-                    if obj.profile.service.direction:
-                        direction_data = {
-                            'id': obj.profile.service.direction.id,
-                            'nom': obj.profile.service.direction.nom
-                        }
+                if profile.service:
+                    svc = profile.service
+                    svc_direction = None
+                    if svc.sous_direction and svc.sous_direction.direction:
+                        d = svc.sous_direction.direction
+                        svc_direction = {'id': d.id, 'nom': d.nom}
+                    elif svc.direction:
+                        svc_direction = {'id': svc.direction.id, 'nom': svc.direction.nom}
                     service_data = {
-                        'id': obj.profile.service.id,
-                        'nom': obj.profile.service.nom,
-                        'direction': direction_data
+                        'id': svc.id,
+                        'nom': svc.nom,
+                        'sous_direction': svc.sous_direction_id,
+                        'direction': svc_direction,
                     }
-                
                 return {
-                    'role': obj.profile.role,
-                    'matricule': obj.profile.matricule,
-                    'telephone': obj.profile.telephone,
-                    'service': service_data
+                    'role': profile.role,
+                    'matricule': profile.matricule,
+                    'telephone': profile.telephone,
+                    'service': service_data,
+                    'direction': {'id': profile.direction.id, 'nom': profile.direction.nom} if profile.direction else None,
+                    'sous_direction': {'id': profile.sous_direction.id, 'nom': profile.sous_direction.nom} if profile.sous_direction else None,
                 }
-        except AttributeError as e:
-            print(f"[DEBUG] AttributeError in get_profile for user {obj.id}: {e}")
-        print(f"[DEBUG] No profile found for user {obj.id}")
+        except AttributeError:
+            pass
         return None
 
     def update(self, instance, validated_data):
         import logging
         logger = logging.getLogger(__name__)
         profile_data = validated_data.pop('profile', {}) if 'profile' in validated_data else {}
-        # Récupération du matricule
-        matricule = None
-        if 'matricule' in profile_data:
-            matricule = profile_data['matricule']
-        elif 'matricule' in validated_data:
-            matricule = validated_data.pop('matricule')
-        # Récupération du service
-        service = None
-        if 'service' in profile_data:
-            service = profile_data['service']
-        elif 'service' in validated_data:
-            service = validated_data.pop('service')
-        # Récupération du rôle
-        role = None
-        if 'role' in profile_data:
-            role = profile_data['role']
-        elif 'role' in validated_data:
-            role = validated_data.pop('role')
+
+        def _pop(key):
+            if key in profile_data:
+                return profile_data.pop(key)
+            return validated_data.pop(key, None)
+
+        matricule      = _pop('matricule')
+        telephone      = _pop('telephone')
+        service        = _pop('service')
+        direction      = _pop('direction')
+        sous_direction = _pop('sous_direction')
+        role           = _pop('role')
         # Mot de passe
         password = validated_data.pop('password', None)
         # Update user fields
@@ -256,28 +258,32 @@ class UserSerializer(serializers.ModelSerializer):
             if matricule is not None and matricule != profile.matricule:
                 logger.info(f'[UserSerializer] Mise à jour du matricule: {profile.matricule} -> {matricule}')
                 profile.matricule = str(matricule)
-            # Téléphone
-            telephone = None
-            if 'telephone' in validated_data:
-                telephone = validated_data.pop('telephone')
-            elif 'profile' in validated_data and 'telephone' in validated_data['profile']:
-                telephone = validated_data['profile'].pop('telephone')
-            if telephone is not None and telephone != profile.telephone:
-                logger.info(f'[UserSerializer] Mise à jour du téléphone: {profile.telephone} -> {telephone}')
-                profile.telephone = telephone
+            # Téléphone — chaîne vide → null pour respecter unique=True
+            if telephone is not None:
+                telephone = telephone.strip() or None
+                if telephone != profile.telephone:
+                    logger.info(f'[UserSerializer] Mise à jour du téléphone: {profile.telephone} -> {telephone}')
+                    profile.telephone = telephone
 
             # Service
             if service is not None:
                 if isinstance(service, int):
                     try:
-                        service_obj = Service.objects.get(pk=service)
-                        logger.info(f'[UserSerializer] Mise à jour du service: {profile.service} -> {service_obj}')
-                        profile.service = service_obj
+                        profile.service = Service.objects.get(pk=service)
                     except Service.DoesNotExist:
                         logger.warning(f'[UserSerializer] Service id {service} introuvable')
                 else:
-                    logger.info(f'[UserSerializer] Mise à jour du service: {profile.service} -> {service}')
                     profile.service = service
+            # Direction
+            if direction is not None:
+                profile.direction = direction
+            elif hasattr(self, 'initial_data') and 'direction' in self.initial_data:
+                profile.direction = None
+            # Sous-Direction
+            if sous_direction is not None:
+                profile.sous_direction = sous_direction
+            elif hasattr(self, 'initial_data') and 'sous_direction' in self.initial_data:
+                profile.sous_direction = None
             # Role
             if role is not None and role != profile.role:
                 logger.info(f'[UserSerializer] Mise à jour du rôle: {profile.role} -> {role}')
@@ -302,11 +308,16 @@ class UserSerializer(serializers.ModelSerializer):
             profile_data = validated_data.pop('profile')
         
         # Extraire les champs du profil depuis les données principales
-        role = validated_data.pop('role', profile_data.get('role', 'AGENT'))
-        service = validated_data.pop('service', profile_data.get('service'))
-        matricule = validated_data.pop('matricule', profile_data.get('matricule'))
-        telephone = validated_data.pop('telephone', profile_data.get('telephone'))
-        
+        role           = validated_data.pop('role',           profile_data.get('role', 'AGENT'))
+        service        = validated_data.pop('service',        profile_data.get('service'))
+        direction      = validated_data.pop('direction',      profile_data.get('direction'))
+        sous_direction = validated_data.pop('sous_direction', profile_data.get('sous_direction'))
+        matricule      = validated_data.pop('matricule',      profile_data.get('matricule'))
+        telephone      = validated_data.pop('telephone',      profile_data.get('telephone'))
+        # Chaîne vide → null pour respecter unique=True
+        if isinstance(telephone, str):
+            telephone = telephone.strip() or None
+
         # Traiter le mot de passe
         password = validated_data.pop('password', None)
         if password:
@@ -321,17 +332,20 @@ class UserSerializer(serializers.ModelSerializer):
             defaults={
                 'role': role,
                 'service': service,
+                'direction': direction,
+                'sous_direction': sous_direction,
                 'matricule': matricule,
-                'telephone': telephone
+                'telephone': telephone,
             }
         )
-        
+
         if not created:
-            # Mettre à jour le profil existant
-            profile.role = role or profile.role
-            profile.service = service or profile.service
-            profile.matricule = matricule or profile.matricule
-            profile.telephone = telephone or profile.telephone
+            profile.role          = role          or profile.role
+            profile.service       = service       or profile.service
+            profile.direction     = direction     if direction is not None else profile.direction
+            profile.sous_direction = sous_direction if sous_direction is not None else profile.sous_direction
+            profile.matricule     = matricule     or profile.matricule
+            profile.telephone     = telephone     or profile.telephone
             profile.save()
         
         return user
@@ -550,11 +564,6 @@ class ServiceSerializer(serializers.ModelSerializer):
         model = Service
         fields = ['id', 'nom', 'description', 'sous_direction', 'sous_direction_nom', 'sous_direction_obj', 'direction', 'direction_nom']
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        print(f'\nService {instance.nom}:')
-        print('- Full data:', representation)
-        return representation
 
 class CourrierSerializer(serializers.ModelSerializer):
     service_details = serializers.SerializerMethodField()

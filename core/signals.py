@@ -7,9 +7,22 @@ import secrets
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
-    # Crée le profil UNIQUEMENT s'il n'existe pas déjà
-    if created and not hasattr(instance, 'profile'):
-        UserProfile.objects.create(user=instance)
+    if created:
+        role = 'ADMIN' if instance.is_superuser else 'AGENT'
+        if not hasattr(instance, 'profile'):
+            UserProfile.objects.create(user=instance, role=role)
+        elif instance.is_superuser and instance.profile.role != 'ADMIN':
+            instance.profile.role = 'ADMIN'
+            instance.profile.save(update_fields=['role'])
+    elif instance.is_superuser:
+        # Superuser promu après coup → on garantit le rôle ADMIN
+        try:
+            profile = instance.profile
+            if profile.role != 'ADMIN':
+                profile.role = 'ADMIN'
+                profile.save(update_fields=['role'])
+        except UserProfile.DoesNotExist:
+            UserProfile.objects.create(user=instance, role='ADMIN')
 
 @receiver(post_save, sender=UserProfile)
 def create_profile_fields(sender, instance, created, **kwargs):

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.env/Scripts/python.exe manage.py fix_superuser_roles)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\('antd:', p.dependencies.antd\\); console.log\\('react:', p.dependencies.react\\);\")",
+      "Bash(.env/Scripts/python.exe -c \"import ast, sys; ast.parse\\(open\\('core/serializers.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(node -e \"require\\('./src/App.js'\\)\")",
+      "Bash(.env/Scripts/python.exe manage.py shell -c \"from django.contrib.auth.models import User; u = User.objects.filter\\(pk=3\\).first\\(\\); print\\('User pk=3:', u\\); print\\('All users:', list\\(User.objects.values\\('id','username'\\)\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/users/3/)",
+      "Bash(curl -s http://localhost:8000/api/users/ -H \"Origin: http://localhost:3000\" -I)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/users/3/ -H \"Origin: http://localhost:3000\")",
+      "Bash(curl -s -I -X OPTIONS http://localhost:8000/api/users/3/ -H \"Origin: http://localhost:3000\" -H \"Access-Control-Request-Method: PATCH\" -H \"Access-Control-Request-Headers: authorization,content-type\")",
+      "Bash(taskkill /F /IM python.exe)",
+      "PowerShell(Get-Process python -ErrorAction SilentlyContinue)",
+      "PowerShell(netstat -ano)",
+      "PowerShell(Get-Process -Id 9192, 17244 -ErrorAction SilentlyContinue)",
+      "Bash(wmic process *)",
+      "PowerShell(Stop-Process -Id 9192, 17244 -Force -ErrorAction SilentlyContinue)",
+      "Bash(.env/Scripts/python.exe manage.py runserver)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/api/users/ -H \"Origin: http://localhost:3000\")",
+      "Bash(python manage.py dbshell -- --execute=\"DESCRIBE core_userprofile;\")",
+      "PowerShell(Select-String -Path \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\ediligencebackend\\\\core\\\\migrations\\\\0001_initial.py\" -Pattern \"direction|userprofile\" -CaseSensitive:$false | Select-Object -First 30 | ForEach-Object { $_.LineNumber.ToString\\(\\) + \": \" + $_.Line })",
+      "PowerShell(Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match \"manage\" -or $_.CommandLine -match \"manage.py\" } | Select-Object Id, ProcessName)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/api/users/\" -Method GET -UseBasicParsing -TimeoutSec 5 2>&1)"
+    ]
+  }
+}

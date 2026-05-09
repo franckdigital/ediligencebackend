@@ -91,7 +91,10 @@ class UserViewSet(viewsets.ModelViewSet):
         qs = User.objects.select_related(
             'profile',
             'profile__service',
-            'profile__service__direction'
+            'profile__service__sous_direction',
+            'profile__service__sous_direction__direction',
+            'profile__direction',
+            'profile__sous_direction',
         )
         roles = self.request.query_params.get('roles')
         if roles:
@@ -1187,7 +1190,7 @@ class ListUsersView(APIView):
     authentication_classes = [JWTAuthentication]
 
     def get(self, request):
-        users = User.objects.select_related('profile', 'profile__service', 'profile__service__direction').all()
+        users = User.objects.select_related('profile', 'profile__service', 'profile__service__sous_direction', 'profile__direction', 'profile__sous_direction').all()
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
 

@@ -164,6 +164,20 @@ class UserProfile(models.Model):
     matricule = models.CharField(max_length=64, blank=True, null=True)
     telephone = models.CharField(max_length=32, unique=True, blank=True, null=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
+    direction = models.ForeignKey(
+        'Direction',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='profile_users',
+    )
+    sous_direction = models.ForeignKey(
+        'SousDirection',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='profile_users',
+    )
     service = models.ForeignKey(
         Service,
         on_delete=models.SET_NULL,
@@ -185,15 +199,6 @@ class UserProfile(models.Model):
         verbose_name = 'Profil utilisateur'
         verbose_name_plural = 'Profils utilisateurs'
 
-    def __str__(self):
-        service_info = f" - {self.service}" if self.service else ""
-        return f"{self.user.username} ({self.get_role_display()}){service_info}"
-
-    @property
-    def direction(self):
-        """Retourne la direction de l'utilisateur via son service"""
-        return self.service.direction if self.service else None
-    
     def __str__(self):
         return f"{self.user.username} - {self.role}"
 
