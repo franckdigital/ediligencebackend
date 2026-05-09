@@ -20,6 +20,10 @@ from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationView
 from .geofencing_views import GeofenceAlertViewSet, GeofenceSettingsViewSet, AgentLocationViewSet, PushNotificationTokenViewSet
 from .device_locking_views import CheckDeviceLockView, LockDeviceView, UnlockDeviceView, DeviceLockViewSet
 from .agenda_views import RendezVousViewSet, RendezVousDocumentViewSet, ReunionViewSet, ReunionPresenceViewSet
+from .views_rh import (
+    FicheAgentViewSet, MissionRHViewSet, EvaluationRHViewSet,
+    FormationRHViewSet, InscriptionFormationRHViewSet, DocumentRHViewSet
+)
 from .ged_views import (
     CategorieDocumentViewSet, DocumentViewSet, DocumentLogViewSet,
     ged_courriers_disponibles, ged_diligences_disponibles,
@@ -86,6 +90,14 @@ router.register(r'device-locks', DeviceLockViewSet, basename='device-locks')
 router.register(r'ged/categories', CategorieDocumentViewSet, basename='ged-categories')
 router.register(r'ged/documents', DocumentViewSet, basename='ged-documents')
 router.register(r'ged/logs', DocumentLogViewSet, basename='ged-logs')
+
+# --- ROUTES MODULE RH ---
+router.register(r'rh/fiches-agents', FicheAgentViewSet, basename='rh-fiches-agents')
+router.register(r'rh/missions', MissionRHViewSet, basename='rh-missions')
+router.register(r'rh/evaluations', EvaluationRHViewSet, basename='rh-evaluations')
+router.register(r'rh/formations', FormationRHViewSet, basename='rh-formations')
+router.register(r'rh/inscriptions-formations', InscriptionFormationRHViewSet, basename='rh-inscriptions-formations')
+router.register(r'rh/documents', DocumentRHViewSet, basename='rh-documents')
 
 # --- ROUTES AGENDA ---
 router.register(r'rendezvous', RendezVousViewSet, basename='rendezvous')

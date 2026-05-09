@@ -1842,3 +1842,203 @@ class CertificatArchivage(models.Model):
 
     def __str__(self):
         return f"Certificat {self.numero_certificat} — {self.document.reference}"
+
+
+# ============================================================
+# MODULE RH — Gestion du Personnel
+# ============================================================
+
+class FicheAgent(models.Model):
+    STATUT_CHOICES = [
+        ('actif', 'Actif'),
+        ('suspendu', 'Suspendu'),
+        ('retraite', 'Retraité'),
+        ('demissionnaire', 'Démissionnaire'),
+    ]
+    SITUATION_CHOICES = [
+        ('celibataire', 'Célibataire'),
+        ('marie', 'Marié(e)'),
+        ('divorce', 'Divorcé(e)'),
+        ('veuf', 'Veuf/Veuve'),
+    ]
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='fiche_agent', null=True, blank=True)
+    matricule = models.CharField(max_length=50, unique=True)
+    nom = models.CharField(max_length=100)
+    prenoms = models.CharField(max_length=200)
+    photo = models.ImageField(upload_to='rh/agents/photos/', null=True, blank=True)
+    grade = models.CharField(max_length=100, blank=True)
+    emploi = models.CharField(max_length=200, blank=True)
+    fonction = models.CharField(max_length=200, blank=True)
+    direction = models.ForeignKey('Direction', on_delete=models.SET_NULL, null=True, blank=True, related_name='fiches_agents')
+    service = models.ForeignKey('Service', on_delete=models.SET_NULL, null=True, blank=True, related_name='fiches_agents')
+    sous_direction = models.ForeignKey('SousDirection', on_delete=models.SET_NULL, null=True, blank=True, related_name='fiches_agents')
+    date_prise_service = models.DateField(null=True, blank=True)
+    date_naissance = models.DateField(null=True, blank=True)
+    lieu_naissance = models.CharField(max_length=200, blank=True)
+    situation_matrimoniale = models.CharField(max_length=20, choices=SITUATION_CHOICES, default='celibataire')
+    nombre_enfants = models.PositiveIntegerField(default=0)
+    telephone = models.CharField(max_length=20, blank=True)
+    email_professionnel = models.EmailField(blank=True)
+    adresse = models.TextField(blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='actif')
+    contact_urgence_nom = models.CharField(max_length=200, blank=True)
+    contact_urgence_tel = models.CharField(max_length=20, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Fiche Agent'
+        ordering = ['nom', 'prenoms']
+
+    def __str__(self):
+        return f"{self.matricule} - {self.nom} {self.prenoms}"
+
+
+class MissionRH(models.Model):
+    STATUT_CHOICES = [
+        ('demande', 'Demande'),
+        ('validee', 'Validée'),
+        ('rejetee', 'Rejetée'),
+        ('en_cours', 'En cours'),
+        ('terminee', 'Terminée'),
+        ('archivee', 'Archivée'),
+    ]
+    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='missions_rh')
+    objet = models.CharField(max_length=500)
+    destination = models.CharField(max_length=500)
+    date_debut = models.DateField()
+    date_fin = models.DateField()
+    vehicule = models.BooleanField(default=False)
+    type_vehicule = models.CharField(max_length=100, blank=True)
+    frais_alloues = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    ordre_mission_num = models.CharField(max_length=100, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='demande')
+    valideur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='missions_rh_validees')
+    date_validation = models.DateTimeField(null=True, blank=True)
+    motif_rejet = models.TextField(blank=True)
+    rapport = models.TextField(blank=True)
+    rapport_fichier = models.FileField(upload_to='rh/missions/rapports/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Mission RH'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Mission {self.agent} → {self.destination}"
+
+
+class EvaluationRH(models.Model):
+    MENTION_CHOICES = [
+        ('excellent', 'Excellent'),
+        ('tres_bien', 'Très Bien'),
+        ('bien', 'Bien'),
+        ('satisfaisant', 'Satisfaisant'),
+        ('insuffisant', 'Insuffisant'),
+    ]
+    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='evaluations_rh')
+    evaluateur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='evaluations_rh_faites')
+    annee = models.PositiveIntegerField()
+    periode = models.CharField(max_length=50, blank=True, default='Annuelle')
+    note_globale = models.FloatField(default=0)
+    mention = models.CharField(max_length=20, choices=MENTION_CHOICES, blank=True)
+    ponctualite = models.FloatField(default=0)
+    assiduite = models.FloatField(default=0)
+    competence = models.FloatField(default=0)
+    initiative = models.FloatField(default=0)
+    travail_equipe = models.FloatField(default=0)
+    rendement = models.FloatField(default=0)
+    appreciation = models.TextField(blank=True)
+    objectifs_atteints = models.TextField(blank=True)
+    objectifs_prochaine_periode = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Évaluation RH'
+        ordering = ['-annee']
+
+    def __str__(self):
+        return f"Éval {self.agent} — {self.annee}"
+
+
+class FormationRH(models.Model):
+    STATUT_CHOICES = [
+        ('planifiee', 'Planifiée'),
+        ('en_cours', 'En cours'),
+        ('terminee', 'Terminée'),
+        ('annulee', 'Annulée'),
+    ]
+    titre = models.CharField(max_length=500)
+    description = models.TextField(blank=True)
+    organisateur = models.CharField(max_length=500, blank=True)
+    lieu = models.CharField(max_length=500, blank=True)
+    date_debut = models.DateField()
+    date_fin = models.DateField()
+    duree_heures = models.PositiveIntegerField(default=0)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='planifiee')
+    places_disponibles = models.PositiveIntegerField(null=True, blank=True)
+    cout = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='formations_rh_creees')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Formation RH'
+        ordering = ['-date_debut']
+
+    def __str__(self):
+        return self.titre
+
+
+class InscriptionFormationRH(models.Model):
+    STATUT_CHOICES = [
+        ('inscrit', 'Inscrit'),
+        ('present', 'Présent'),
+        ('absent', 'Absent'),
+        ('certifie', 'Certifié'),
+    ]
+    formation = models.ForeignKey(FormationRH, on_delete=models.CASCADE, related_name='inscriptions')
+    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='inscriptions_formations_rh')
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='inscrit')
+    attestation = models.FileField(upload_to='rh/formations/attestations/', null=True, blank=True)
+    note = models.FloatField(null=True, blank=True)
+    observations = models.TextField(blank=True)
+    date_inscription = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['formation', 'agent']
+
+    def __str__(self):
+        return f"{self.agent} → {self.formation}"
+
+
+class DocumentRH(models.Model):
+    TYPE_CHOICES = [
+        ('arrete', 'Arrêté'),
+        ('decision', 'Décision'),
+        ('affectation', 'Affectation'),
+        ('promotion', 'Promotion'),
+        ('sanction', 'Sanction'),
+        ('acte', 'Acte administratif'),
+        ('contrat', 'Contrat'),
+        ('diplome', 'Diplôme'),
+        ('autre', 'Autre'),
+    ]
+    agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents_rh')
+    type_document = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    titre = models.CharField(max_length=500)
+    reference = models.CharField(max_length=200, blank=True)
+    date_document = models.DateField()
+    fichier = models.FileField(upload_to='rh/documents/', null=True, blank=True)
+    description = models.TextField(blank=True)
+    signataire = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='documents_rh_crees')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Document RH'
+        ordering = ['-date_document']
+
+    def __str__(self):
+        return f"{self.get_type_document_display()} — {self.titre}"
