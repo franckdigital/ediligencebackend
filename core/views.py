@@ -159,6 +159,22 @@ class UserViewSet(viewsets.ModelViewSet):
         print("Données renvoyées:", serializer.data)
         return Response(serializer.data)
     
+    def get_object(self):
+        """Bypass site-filtering for direct PK lookups (update/delete/retrieve)."""
+        pk = self.kwargs.get(self.lookup_field)
+        try:
+            obj = User.objects.select_related(
+                'profile', 'profile__service',
+                'profile__service__sous_direction',
+                'profile__service__sous_direction__direction',
+                'profile__direction', 'profile__sous_direction', 'profile__site',
+            ).get(pk=pk)
+        except User.DoesNotExist:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Utilisateur non trouvé.')
+        self.check_object_permissions(self.request, obj)
+        return obj
+
     def partial_update(self, request, *args, **kwargs):
         kwargs['partial'] = True
         return self.update(request, *args, **kwargs)
