@@ -2,7 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     FicheAgent, MissionRH, EvaluationRH, FormationRH,
-    InscriptionFormationRH, DocumentRH, Direction, Service, SousDirection
+    InscriptionFormationRH, DocumentRH, Direction, Service, SousDirection,
+    DemandeAttestation
 )
 
 
@@ -110,4 +111,24 @@ class DocumentRHSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.fichier.url)
+        return None
+
+
+class DemandeAttestationSerializer(serializers.ModelSerializer):
+    agent_info = UserBriefSerializer(source='agent', read_only=True)
+    responsable_info = UserBriefSerializer(source='responsable_rh', read_only=True)
+    type_display = serializers.CharField(source='get_type_attestation_display', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    pdf_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DemandeAttestation
+        fields = '__all__'
+        read_only_fields = ['numero_attestation', 'created_at', 'updated_at', 'pdf_file']
+
+    def get_pdf_url(self, obj):
+        if obj.pdf_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.pdf_file.url)
         return None

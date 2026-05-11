@@ -9,7 +9,7 @@ from .views import (
     UserDiligenceCommentViewSet, UserDiligenceInstructionViewSet,
     DemandeCongeViewSet, DemandeAbsenceViewSet, UpdatePresenceStatusView, DeleteUserView,
     CustomTokenObtainPairView, MaPresenceDuJourView, SimplePresenceView, AgentRegistrationView,
-    DiligenceDownloadFichierView, OccurrenceSpecialeViewSet
+    DiligenceDownloadFichierView, OccurrenceSpecialeViewSet, SiteViewSet, SitePalierViewSet
 )
 from .views_courrier_access import CourrierAccessViewSet
 from .views_courrier_stats import CourrierStatsViewSet
@@ -22,7 +22,8 @@ from .device_locking_views import CheckDeviceLockView, LockDeviceView, UnlockDev
 from .agenda_views import RendezVousViewSet, RendezVousDocumentViewSet, ReunionViewSet, ReunionPresenceViewSet
 from .views_rh import (
     FicheAgentViewSet, MissionRHViewSet, EvaluationRHViewSet,
-    FormationRHViewSet, InscriptionFormationRHViewSet, DocumentRHViewSet
+    FormationRHViewSet, InscriptionFormationRHViewSet, DocumentRHViewSet,
+    DemandeAttestationViewSet
 )
 from .ged_views import (
     CategorieDocumentViewSet, DocumentViewSet, DocumentLogViewSet,
@@ -98,6 +99,9 @@ router.register(r'rh/evaluations', EvaluationRHViewSet, basename='rh-evaluations
 router.register(r'rh/formations', FormationRHViewSet, basename='rh-formations')
 router.register(r'rh/inscriptions-formations', InscriptionFormationRHViewSet, basename='rh-inscriptions-formations')
 router.register(r'rh/documents', DocumentRHViewSet, basename='rh-documents')
+router.register(r'rh/demandes-attestations', DemandeAttestationViewSet, basename='rh-demandes-attestations')
+router.register(r'sites', SiteViewSet, basename='sites')
+router.register(r'site-paliers', SitePalierViewSet, basename='site-paliers')
 
 # --- ROUTES AGENDA ---
 router.register(r'rendezvous', RendezVousViewSet, basename='rendezvous')

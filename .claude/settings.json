@@ -21,7 +21,10 @@
       "Bash(python manage.py dbshell -- --execute=\"DESCRIBE core_userprofile;\")",
       "PowerShell(Select-String -Path \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\ediligencebackend\\\\core\\\\migrations\\\\0001_initial.py\" -Pattern \"direction|userprofile\" -CaseSensitive:$false | Select-Object -First 30 | ForEach-Object { $_.LineNumber.ToString\\(\\) + \": \" + $_.Line })",
       "PowerShell(Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match \"manage\" -or $_.CommandLine -match \"manage.py\" } | Select-Object Id, ProcessName)",
-      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/api/users/\" -Method GET -UseBasicParsing -TimeoutSec 5 2>&1)"
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/api/users/\" -Method GET -UseBasicParsing -TimeoutSec 5 2>&1)",
+      "Bash(node -e \"const fs = require\\('fs'\\); const f = fs.readFileSync\\('src/contexts/SiteContext.js','utf8'\\); console.log\\('OK:', f.includes\\('SiteProvider'\\) && f.includes\\('useSite'\\)\\);\")",
+      "Bash(\".env\\\\Scripts\\\\python.exe\" manage.py makemigrations core --name add_site_palier)",
+      "Bash(\".env\\\\Scripts\\\\python.exe\" manage.py migrate)"
     ]
   }
 }

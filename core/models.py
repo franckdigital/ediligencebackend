@@ -178,6 +178,13 @@ class UserProfile(models.Model):
         blank=True,
         related_name='profile_users',
     )
+    site = models.ForeignKey(
+        'Site',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='agents',
+    )
     service = models.ForeignKey(
         Service,
         on_delete=models.SET_NULL,
@@ -201,6 +208,43 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"
+
+
+class Site(models.Model):
+    TYPE_SITE_CHOICES = [
+        ('siege', 'Siège'),
+        ('direction_regionale', 'Direction Régionale'),
+        ('agence', 'Agence'),
+        ('antenne', 'Antenne'),
+    ]
+    nom = models.CharField(max_length=255)
+    code = models.CharField(max_length=50, unique=True)
+    type_site = models.CharField(max_length=30, choices=TYPE_SITE_CHOICES, default='siege')
+    adresse = models.CharField(max_length=500, blank=True)
+    ville = models.CharField(max_length=100, blank=True)
+    commune = models.CharField(max_length=100, blank=True)
+    telephone = models.CharField(max_length=32, blank=True)
+    email = models.EmailField(blank=True)
+    responsable = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sites_responsable'
+    )
+    logo = models.ImageField(upload_to='sites/logos/', null=True, blank=True)
+    fuseau_horaire = models.CharField(max_length=50, default='Africa/Abidjan')
+    est_actif = models.BooleanField(default=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    rayon_pointage = models.IntegerField(default=200, help_text='Rayon en mètres pour le pointage GPS')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Site'
+        verbose_name_plural = 'Sites'
+        ordering = ['nom']
+
+    def __str__(self):
+        return f"{self.nom} ({self.get_type_site_display()})"
+
 
 class Courrier(models.Model):
     TYPE_CHOICES = [
@@ -2047,3 +2091,72 @@ class DocumentRH(models.Model):
 
     def __str__(self):
         return f"{self.get_type_document_display()} — {self.titre}"
+
+
+class DemandeAttestation(models.Model):
+    TYPE_CHOICES = [
+        ('travail', 'Attestation de travail'),
+        ('presence', 'Attestation de présence'),
+    ]
+    STATUT_CHOICES = [
+        ('en_attente', 'En attente'),
+        ('en_cours', 'En cours de traitement'),
+        ('traitee', 'Traitée'),
+        ('terminee', 'Terminée'),
+        ('rejetee', 'Rejetée'),
+        ('annulee', 'Annulée'),
+    ]
+    agent = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='demandes_attestations'
+    )
+    responsable_rh = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='attestations_traitees'
+    )
+    type_attestation = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    motif = models.TextField(blank=True)
+    nombre_copies = models.PositiveIntegerField(default=1)
+    commentaire_agent = models.TextField(blank=True)
+    date_souhaitee = models.DateField(null=True, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
+    commentaire_rh = models.TextField(blank=True)
+    numero_attestation = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    pdf_file = models.FileField(upload_to='attestations/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Demande d'attestation"
+        verbose_name_plural = "Demandes d'attestation"
+
+    def __str__(self):
+        return f"{self.get_type_attestation_display()} - {self.agent.username} - {self.statut}"
+
+    def generer_numero(self):
+        if not self.numero_attestation and self.pk:
+            self.numero_attestation = f"ATT-{self.created_at.year}-{self.pk:06d}"
+            type(self).objects.filter(pk=self.pk).update(numero_attestation=self.numero_attestation)
+
+
+class SitePalier(models.Model):
+    """Palier (étage/niveau) d'un site — chaque palier peut avoir ses propres coordonnées GPS."""
+    site = models.ForeignKey(
+        Site, on_delete=models.CASCADE, related_name='paliers'
+    )
+    nom = models.CharField(max_length=100, help_text="Ex: Rez-de-chaussée, 3ème étage, Bâtiment B")
+    description = models.CharField(max_length=255, blank=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    rayon_pointage = models.IntegerField(default=200, help_text='Rayon en mètres pour le pointage GPS')
+    est_actif = models.BooleanField(default=True)
+    ordre = models.PositiveSmallIntegerField(default=0, help_text='Ordre d\'affichage')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Palier de site'
+        verbose_name_plural = 'Paliers de site'
+        ordering = ['ordre', 'nom']
+
+    def __str__(self):
+        return f"{self.site.nom} — {self.nom}"

@@ -399,3 +399,126 @@ def create_pdf_response(buffer, filename):
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+def generate_attestation_pdf(demande):
+    """Génère un PDF d'attestation (travail ou présence) pour une demande."""
+    from .models import FicheAgent
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2*cm
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=16, spaceAfter=6, alignment=TA_CENTER, fontName='Helvetica-Bold')
+    subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontSize=11, spaceAfter=4, alignment=TA_CENTER, fontName='Helvetica')
+    label_style = ParagraphStyle('Label', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold')
+    value_style = ParagraphStyle('Value', parent=styles['Normal'], fontSize=10)
+    center_style = ParagraphStyle('Center', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)
+
+    agent = demande.agent
+    profile = getattr(agent, 'profile', None)
+
+    # Récupérer la fiche agent si elle existe
+    fiche = FicheAgent.objects.filter(user=agent).first() if agent else None
+
+    nom = (fiche.nom if fiche else agent.last_name) or ''
+    prenoms = (fiche.prenoms if fiche else agent.first_name) or ''
+    matricule = (fiche.matricule if fiche else getattr(profile, 'matricule', '')) or ''
+    grade = (fiche.grade if fiche else '') or ''
+    emploi = (fiche.emploi if fiche else '') or ''
+    fonction = (fiche.fonction if fiche else '') or ''
+    date_prise = fiche.date_prise_service if fiche and fiche.date_prise_service else None
+
+    direction_nom = ''
+    sous_direction_nom = ''
+    service_nom = ''
+
+    if fiche:
+        direction_nom = fiche.direction.nom if fiche.direction else ''
+        sous_direction_nom = fiche.sous_direction.nom if fiche.sous_direction else ''
+        service_nom = fiche.service.nom if fiche.service else ''
+    elif profile:
+        if profile.direction:
+            direction_nom = profile.direction.nom
+        if profile.sous_direction:
+            sous_direction_nom = profile.sous_direction.nom
+        if profile.service:
+            service_nom = profile.service.nom
+
+    type_label = demande.get_type_attestation_display()
+    today = datetime.date.today()
+    numero = demande.numero_attestation or f"ATT-{today.year}-{demande.pk:06d}"
+
+    story = []
+
+    # En-tête armoirie
+    armoirie = _armoirie_image(3.0, 3.0)
+    if armoirie:
+        story.append(armoirie)
+        story.append(Spacer(1, 0.3*cm))
+
+    story.append(Paragraph("RÉPUBLIQUE DE CÔTE D'IVOIRE", subtitle_style))
+    story.append(Paragraph("Union – Discipline – Travail", subtitle_style))
+    story.append(Spacer(1, 0.5*cm))
+    story.append(Paragraph(type_label.upper(), title_style))
+    story.append(Spacer(1, 0.3*cm))
+    story.append(Paragraph(f"N° {numero}", center_style))
+    story.append(Spacer(1, 0.8*cm))
+
+    # Corps
+    infos = [
+        ('Nom et Prénoms', f"{nom} {prenoms}".strip()),
+        ('Matricule', matricule),
+        ('Grade', grade),
+        ('Emploi', emploi),
+        ('Fonction', fonction),
+        ('Direction', direction_nom),
+        ('Sous-Direction', sous_direction_nom),
+        ('Service', service_nom),
+        ('Date de prise de service', date_prise.strftime('%d/%m/%Y') if date_prise else ''),
+    ]
+
+    table_data = [[Paragraph(l, label_style), Paragraph(v or '—', value_style)] for l, v in infos]
+    table = Table(table_data, colWidths=[6*cm, 11*cm])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#FFF3E0')),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#E65100')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E0E0E0')),
+        ('ROWBACKGROUNDS', (1, 0), (1, -1), [colors.white, colors.HexColor('#FAFAFA')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 1*cm))
+
+    # Texte d'attestation
+    if demande.type_attestation == 'travail':
+        texte = (
+            f"Je soussigné(e), certifie que <b>{nom} {prenoms}</b>, Matricule <b>{matricule}</b>, "
+            f"occupe le poste de <b>{emploi or 'Agent'}</b> au sein de notre structure "
+            f"depuis le <b>{date_prise.strftime('%d/%m/%Y') if date_prise else '...'}</b>. "
+            f"La présente attestation est délivrée pour servir et valoir ce que de droit."
+        )
+    else:
+        texte = (
+            f"Je soussigné(e), certifie que <b>{nom} {prenoms}</b>, Matricule <b>{matricule}</b>, "
+            f"est bien présent(e) et en activité au sein de notre structure. "
+            f"La présente attestation de présence est délivrée pour servir et valoir ce que de droit."
+        )
+
+    body_style = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=18, spaceAfter=12)
+    story.append(Paragraph(texte, body_style))
+    story.append(Spacer(1, 1.5*cm))
+
+    # Signature
+    story.append(Paragraph(f"Fait à ................, le {today.strftime('%d/%m/%Y')}", center_style))
+    story.append(Spacer(1, 0.5*cm))
+    story.append(Paragraph("Le Responsable RH", center_style))
+    story.append(Spacer(1, 2*cm))
+    story.append(Paragraph("Signature et cachet", center_style))
+
+    doc.build(story)
+    return buffer.getvalue()

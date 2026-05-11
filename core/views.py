@@ -29,13 +29,14 @@ from rest_framework.exceptions import PermissionDenied
 from .pdf_utils import generate_conge_pdf, generate_absence_pdf, create_pdf_response
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
-from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence, OccurrenceSpeciale
+from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence, OccurrenceSpeciale, Site, SitePalier
 from .serializers import (
     CourrierSerializer, ServiceSerializer, DirectionSerializer, SousDirectionSerializer,
     DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
     UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer, OccurrenceSpecialeSerializer,
     ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
-    BureauSerializer, CourrierImputationSerializer, PresenceSerializer, RolePermissionSerializer
+    BureauSerializer, CourrierImputationSerializer, PresenceSerializer, RolePermissionSerializer,
+    SiteSerializer, SitePalierSerializer
 )
 from .permissions import IsProfileAdmin
 from django.contrib.auth.models import User
@@ -45,6 +46,30 @@ logger = logging.getLogger(__name__)
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def get_site_id_for_request(request):
+    """
+    Returns the effective site_id to filter data on:
+    - Admin: reads X-Site-ID header (set by the frontend site selector)
+    - Other roles: forced to their own profile.site_id
+    Returns None if no site can be determined (no filtering applied).
+    """
+    profile = getattr(request.user, 'profile', None)
+    role = getattr(profile, 'role', None) if profile else None
+
+    if role == 'ADMIN':
+        site_id = request.headers.get('X-Site-ID') or request.query_params.get('site_id')
+        if site_id:
+            try:
+                return int(site_id)
+            except (ValueError, TypeError):
+                pass
+        return None  # Admin without a site header: sees everything
+    else:
+        # Non-admin: always forced to their own site
+        return getattr(profile, 'site_id', None)
+
 
 # SetFingerprintView removed - using simple button presence now
 
@@ -95,7 +120,13 @@ class UserViewSet(viewsets.ModelViewSet):
             'profile__service__sous_direction__direction',
             'profile__direction',
             'profile__sous_direction',
+            'profile__site',
         )
+        # Site isolation
+        site_id = get_site_id_for_request(self.request)
+        if site_id:
+            qs = qs.filter(profile__site_id=site_id)
+
         roles = self.request.query_params.get('roles')
         if roles:
             role_list = [r.strip() for r in roles.split(',') if r.strip()]
@@ -426,6 +457,38 @@ class DirectionViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+class SiteViewSet(viewsets.ModelViewSet):
+    queryset = Site.objects.select_related('responsable').prefetch_related('paliers').all()
+    serializer_class = SiteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get('actif'):
+            qs = qs.filter(est_actif=True)
+        return qs
+
+    def perform_destroy(self, instance):
+        # Détacher les agents du site avant suppression
+        instance.agents.all().update(site=None)
+        instance.delete()
+
+
+class SitePalierViewSet(viewsets.ModelViewSet):
+    queryset = SitePalier.objects.select_related('site').all()
+    serializer_class = SitePalierSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        site_id = self.request.query_params.get('site')
+        if site_id:
+            qs = qs.filter(site_id=site_id)
+        return qs
+
+
 class SousDirectionViewSet(viewsets.ModelViewSet):
     queryset = SousDirection.objects.all()
     serializer_class = SousDirectionSerializer
@@ -508,6 +571,11 @@ class DiligenceViewSet(viewsets.ModelViewSet):
 
         role = profile.role
         print(f"[DEBUG] DiligenceViewSet get_queryset - User: {user.username} (ID: {user.id}), Role: {role}")
+
+        # Site isolation — filter base_qs to the active site
+        site_id = get_site_id_for_request(self.request)
+        if site_id:
+            base_qs = base_qs.filter(agents__profile__site_id=site_id).distinct()
 
         # Filtrage par statut si présent dans la requête
         statut = self.request.query_params.get('statut')
@@ -720,7 +788,17 @@ class CourrierViewSet(viewsets.ModelViewSet):
             'service',
             'service__direction'
         ).all()
-        
+
+        # Site isolation
+        site_id = get_site_id_for_request(self.request)
+        if site_id:
+            # Filter courriers by imputations belonging to users from this site
+            site_user_ids = User.objects.filter(profile__site_id=site_id).values_list('id', flat=True)
+            courrier_ids_via_imputations = CourrierImputation.objects.filter(
+                user_id__in=site_user_ids
+            ).values_list('courrier_id', flat=True)
+            queryset = queryset.filter(id__in=courrier_ids_via_imputations)
+
         # Filtrage selon le type de courrier et les permissions
         if hasattr(user, 'profile'):
             # Les ADMIN et SECRETAIRE peuvent voir tous les courriers
@@ -1491,6 +1569,20 @@ class PresenceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [JWTAuthentication]
 
+    def get_queryset(self):
+        qs = Presence.objects.select_related('agent', 'agent__profile').all()
+        site_id = get_site_id_for_request(self.request)
+        if site_id:
+            qs = qs.filter(agent__profile__site_id=site_id)
+        # Allow filtering by specific user
+        user_id = self.request.query_params.get('user') or self.request.query_params.get('agent')
+        if user_id:
+            qs = qs.filter(agent_id=user_id)
+        date_param = self.request.query_params.get('date')
+        if date_param:
+            qs = qs.filter(date=date_param)
+        return qs.order_by('-date', '-heure_arrivee')
+
     def perform_create(self, serializer):
         import logging
         logger = logging.getLogger(__name__)
@@ -1733,10 +1825,15 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
         
         if not profile:
             return DemandeConge.objects.none()
-        
-        # ADMIN peut voir toutes les demandes
+
+        site_id = get_site_id_for_request(self.request)
+
+        # ADMIN peut voir toutes les demandes (filtrées par site si sélectionné)
         if profile.role == 'ADMIN':
-            return DemandeConge.objects.all().order_by('-date_creation')
+            qs = DemandeConge.objects.all().order_by('-date_creation')
+            if site_id:
+                qs = qs.filter(demandeur__profile__site_id=site_id)
+            return qs
         
         # DIRECTEUR peut voir les demandes de toute sa direction
         elif profile.role == 'DIRECTEUR':
@@ -1971,10 +2068,15 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
         
         if not profile:
             return DemandeAbsence.objects.none()
-        
-        # ADMIN peut voir toutes les demandes
+
+        site_id = get_site_id_for_request(self.request)
+
+        # ADMIN peut voir toutes les demandes (filtrées par site si sélectionné)
         if profile.role == 'ADMIN':
-            return DemandeAbsence.objects.all().order_by('-created_at')
+            qs = DemandeAbsence.objects.all().order_by('-created_at')
+            if site_id:
+                qs = qs.filter(demandeur__profile__site_id=site_id)
+            return qs
         
         # DIRECTEUR peut voir les demandes de toute sa direction
         elif profile.role == 'DIRECTEUR':

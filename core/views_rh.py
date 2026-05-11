@@ -6,12 +6,28 @@ from django.db.models import Q, Count
 from django.utils import timezone
 from .models import (
     FicheAgent, MissionRH, EvaluationRH, FormationRH,
-    InscriptionFormationRH, DocumentRH
+    InscriptionFormationRH, DocumentRH, DemandeAttestation
 )
 from .serializers_rh import (
     FicheAgentSerializer, MissionRHSerializer, EvaluationRHSerializer,
-    FormationRHSerializer, InscriptionFormationRHSerializer, DocumentRHSerializer
+    FormationRHSerializer, InscriptionFormationRHSerializer, DocumentRHSerializer,
+    DemandeAttestationSerializer
 )
+
+
+def _get_site_id(request):
+    """Effective site_id for filtering: admin reads X-Site-ID header, others use own site."""
+    profile = getattr(request.user, 'profile', None)
+    role = getattr(profile, 'role', None) if profile else None
+    if role == 'ADMIN':
+        raw = request.headers.get('X-Site-ID') or request.query_params.get('site_id')
+        if raw:
+            try:
+                return int(raw)
+            except (ValueError, TypeError):
+                pass
+        return None
+    return getattr(profile, 'site_id', None)
 
 
 class FicheAgentViewSet(viewsets.ModelViewSet):
@@ -23,6 +39,9 @@ class FicheAgentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        site_id = _get_site_id(self.request)
+        if site_id:
+            qs = qs.filter(user__profile__site_id=site_id)
         statut = self.request.query_params.get('statut')
         direction = self.request.query_params.get('direction')
         service = self.request.query_params.get('service')
@@ -61,14 +80,16 @@ class MissionRHViewSet(viewsets.ModelViewSet):
         role = ''
         if hasattr(user, 'profile'):
             role = getattr(user.profile, 'role', '') or ''
-        statut = self.request.query_params.get('statut')
-        agent = self.request.query_params.get('agent')
 
         if role in ['ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR']:
-            pass  # full access
+            site_id = _get_site_id(self.request)
+            if site_id:
+                qs = qs.filter(agent__profile__site_id=site_id)
         else:
             qs = qs.filter(agent=user)
 
+        statut = self.request.query_params.get('statut')
+        agent = self.request.query_params.get('agent')
         if statut:
             qs = qs.filter(statut=statut)
         if agent:
@@ -124,6 +145,9 @@ class EvaluationRHViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        site_id = _get_site_id(self.request)
+        if site_id:
+            qs = qs.filter(agent__profile__site_id=site_id)
         annee = self.request.query_params.get('annee')
         agent = self.request.query_params.get('agent')
         if annee:
@@ -165,6 +189,9 @@ class InscriptionFormationRHViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        site_id = _get_site_id(self.request)
+        if site_id:
+            qs = qs.filter(agent__profile__site_id=site_id)
         formation = self.request.query_params.get('formation')
         agent = self.request.query_params.get('agent')
         if formation:
@@ -181,6 +208,9 @@ class DocumentRHViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        site_id = _get_site_id(self.request)
+        if site_id:
+            qs = qs.filter(agent__profile__site_id=site_id)
         agent = self.request.query_params.get('agent')
         type_doc = self.request.query_params.get('type_document')
         if agent:
@@ -198,4 +228,114 @@ class DocumentRHViewSet(viewsets.ModelViewSet):
         return Response({
             'total': qs.count(),
             'par_type': list(qs.values('type_document').annotate(count=Count('id'))),
+        })
+
+
+class DemandeAttestationViewSet(viewsets.ModelViewSet):
+    serializer_class = DemandeAttestationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        role = getattr(getattr(user, 'profile', None), 'role', '')
+        qs = DemandeAttestation.objects.select_related(
+            'agent', 'agent__profile', 'responsable_rh'
+        ).all()
+        if role not in ['ADMIN', 'DIRECTEUR', 'SUPERIEUR']:
+            qs = qs.filter(agent=user)
+        else:
+            site_id = _get_site_id(self.request)
+            if site_id:
+                qs = qs.filter(agent__profile__site_id=site_id)
+        statut = self.request.query_params.get('statut')
+        type_att = self.request.query_params.get('type_attestation')
+        if statut:
+            qs = qs.filter(statut=statut)
+        if type_att:
+            qs = qs.filter(type_attestation=type_att)
+        return qs
+
+    def perform_create(self, serializer):
+        instance = serializer.save(agent=self.request.user)
+        instance.generer_numero()
+
+    @action(detail=True, methods=['post'])
+    def approuver(self, request, pk=None):
+        demande = self.get_object()
+        if demande.statut != 'en_attente':
+            return Response({'error': 'Seules les demandes en attente peuvent être approuvées'}, status=400)
+        demande.statut = 'en_cours'
+        demande.responsable_rh = request.user
+        demande.commentaire_rh = request.data.get('commentaire_rh', '')
+        demande.save()
+        return Response(DemandeAttestationSerializer(demande, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def rejeter(self, request, pk=None):
+        demande = self.get_object()
+        if demande.statut not in ['en_attente', 'en_cours']:
+            return Response({'error': 'Cette demande ne peut plus être rejetée'}, status=400)
+        demande.statut = 'rejetee'
+        demande.responsable_rh = request.user
+        demande.commentaire_rh = request.data.get('commentaire_rh', '')
+        demande.save()
+        return Response(DemandeAttestationSerializer(demande, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def terminer(self, request, pk=None):
+        demande = self.get_object()
+        demande.statut = 'terminee'
+        demande.save()
+        return Response(DemandeAttestationSerializer(demande, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def annuler(self, request, pk=None):
+        demande = self.get_object()
+        if demande.agent != request.user:
+            return Response({'error': 'Non autorisé'}, status=403)
+        if demande.statut not in ['en_attente']:
+            return Response({'error': "Impossible d'annuler cette demande"}, status=400)
+        demande.statut = 'annulee'
+        demande.save()
+        return Response(DemandeAttestationSerializer(demande, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def generer_pdf(self, request, pk=None):
+        from .pdf_utils import generate_attestation_pdf
+        from django.core.files.base import ContentFile
+        demande = self.get_object()
+        if demande.statut not in ['en_cours', 'traitee']:
+            return Response({'error': 'La demande doit être en cours pour générer le PDF'}, status=400)
+        try:
+            pdf_bytes = generate_attestation_pdf(demande)
+            filename = f"attestation_{demande.numero_attestation or demande.pk}.pdf"
+            demande.pdf_file.save(filename, ContentFile(pdf_bytes), save=True)
+            demande.statut = 'traitee'
+            demande.responsable_rh = request.user
+            demande.save()
+            return Response({
+                'pdf_url': request.build_absolute_uri(demande.pdf_file.url),
+                'statut': demande.statut,
+                'numero': demande.numero_attestation,
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        role = getattr(getattr(request.user, 'profile', None), 'role', '')
+        qs = DemandeAttestation.objects.all()
+        if role not in ['ADMIN', 'DIRECTEUR', 'SUPERIEUR']:
+            qs = qs.filter(agent=request.user)
+        else:
+            site_id = _get_site_id(request)
+            if site_id:
+                qs = qs.filter(agent__profile__site_id=site_id)
+        return Response({
+            'total': qs.count(),
+            'en_attente': qs.filter(statut='en_attente').count(),
+            'en_cours': qs.filter(statut='en_cours').count(),
+            'traitees': qs.filter(statut='traitee').count(),
+            'terminees': qs.filter(statut='terminee').count(),
+            'rejetees': qs.filter(statut='rejetee').count(),
         })

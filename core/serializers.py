@@ -8,14 +8,15 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from core.models import (
     UserProfile, Service, Direction, SousDirection, Courrier, CourrierAccess, CourrierImputation,
-    UserDiligenceComment, UserDiligenceInstruction, DemandeConge, 
+    UserDiligenceComment, UserDiligenceInstruction, DemandeConge,
     DemandeAbsence, ImputationFile, DiligenceNotification, Diligence,
     Bureau, RolePermission, TacheHistorique, Agent, Presence,
-    Notification, Observation, EtapeEvenement, Prestataire, 
+    Notification, Observation, EtapeEvenement, Prestataire,
     PrestataireEtape, Evaluation, DiligenceDocument, ImputationAccess,
     Fichier, Commentaire, Tache, Activite, Domaine, Projet,
     GeofenceAlert, GeofenceSettings, AgentLocation, PushNotificationToken,
-    OccurrenceSpeciale, RendezVous, RendezVousDocument, Reunion, ReunionPresence
+    OccurrenceSpeciale, RendezVous, RendezVousDocument, Reunion, ReunionPresence,
+    Site, SitePalier
 )
 
 class ImputationFileSerializer(serializers.ModelSerializer):
@@ -171,6 +172,12 @@ class UserSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False
     )
+    site = serializers.PrimaryKeyRelatedField(
+        queryset=Site.objects.all(),
+        source='profile.site',
+        allow_null=True,
+        required=False
+    )
     matricule = serializers.CharField(
         source='profile.matricule',
         allow_null=True,
@@ -187,7 +194,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'is_active',
-            'role', 'role_display', 'service', 'service_obj', 'direction', 'sous_direction',
+            'role', 'role_display', 'service', 'service_obj', 'direction', 'sous_direction', 'site',
             'matricule', 'empreinte_hash', 'telephone', 'password', 'profile'
         ]
         read_only_fields = ['id', 'role_display', 'empreinte_hash', 'service_obj']
@@ -214,6 +221,9 @@ class UserSerializer(serializers.ModelSerializer):
                         'sous_direction': svc.sous_direction_id,
                         'direction': svc_direction,
                     }
+                site_data = None
+                if profile.site:
+                    site_data = {'id': profile.site.id, 'nom': profile.site.nom, 'code': profile.site.code}
                 return {
                     'role': profile.role,
                     'matricule': profile.matricule,
@@ -221,6 +231,7 @@ class UserSerializer(serializers.ModelSerializer):
                     'service': service_data,
                     'direction': {'id': profile.direction.id, 'nom': profile.direction.nom} if profile.direction else None,
                     'sous_direction': {'id': profile.sous_direction.id, 'nom': profile.sous_direction.nom} if profile.sous_direction else None,
+                    'site': site_data,
                 }
         except AttributeError:
             pass
@@ -241,6 +252,7 @@ class UserSerializer(serializers.ModelSerializer):
         service        = _pop('service')
         direction      = _pop('direction')
         sous_direction = _pop('sous_direction')
+        site           = _pop('site')
         role           = _pop('role')
         # Mot de passe
         password = validated_data.pop('password', None)
@@ -284,6 +296,11 @@ class UserSerializer(serializers.ModelSerializer):
                 profile.sous_direction = sous_direction
             elif hasattr(self, 'initial_data') and 'sous_direction' in self.initial_data:
                 profile.sous_direction = None
+            # Site
+            if site is not None:
+                profile.site = site
+            elif hasattr(self, 'initial_data') and 'site' in self.initial_data and self.initial_data['site'] is None:
+                profile.site = None
             # Role
             if role is not None and role != profile.role:
                 logger.info(f'[UserSerializer] Mise à jour du rôle: {profile.role} -> {role}')
@@ -312,6 +329,7 @@ class UserSerializer(serializers.ModelSerializer):
         service        = validated_data.pop('service',        profile_data.get('service'))
         direction      = validated_data.pop('direction',      profile_data.get('direction'))
         sous_direction = validated_data.pop('sous_direction', profile_data.get('sous_direction'))
+        site           = validated_data.pop('site',           profile_data.get('site'))
         matricule      = validated_data.pop('matricule',      profile_data.get('matricule'))
         telephone      = validated_data.pop('telephone',      profile_data.get('telephone'))
         # Chaîne vide → null pour respecter unique=True
@@ -334,6 +352,7 @@ class UserSerializer(serializers.ModelSerializer):
                 'service': service,
                 'direction': direction,
                 'sous_direction': sous_direction,
+                'site': site,
                 'matricule': matricule,
                 'telephone': telephone,
             }
@@ -344,6 +363,7 @@ class UserSerializer(serializers.ModelSerializer):
             profile.service       = service       or profile.service
             profile.direction     = direction     if direction is not None else profile.direction
             profile.sous_direction = sous_direction if sous_direction is not None else profile.sous_direction
+            profile.site          = site          if site is not None else profile.site
             profile.matricule     = matricule     or profile.matricule
             profile.telephone     = telephone     or profile.telephone
             profile.save()
@@ -545,6 +565,33 @@ class DirectionSerializer(serializers.ModelSerializer):
         except:
             # Fallback pour compatibilité
             return []
+
+class SitePalierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SitePalier
+        fields = ['id', 'site', 'nom', 'description', 'latitude', 'longitude',
+                  'rayon_pointage', 'est_actif', 'ordre']
+
+
+class SiteSerializer(serializers.ModelSerializer):
+    responsable_info = serializers.SerializerMethodField()
+    type_display = serializers.CharField(source='get_type_site_display', read_only=True)
+    paliers = SitePalierSerializer(many=True, read_only=True)
+    paliers_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Site
+        fields = '__all__'
+
+    def get_responsable_info(self, obj):
+        if obj.responsable:
+            return {'id': obj.responsable.id, 'username': obj.responsable.username,
+                    'full_name': f"{obj.responsable.first_name} {obj.responsable.last_name}".strip()}
+        return None
+
+    def get_paliers_count(self, obj):
+        return obj.paliers.count()
+
 
 class SousDirectionSerializer(serializers.ModelSerializer):
     direction_nom = serializers.CharField(source='direction.nom', read_only=True)
