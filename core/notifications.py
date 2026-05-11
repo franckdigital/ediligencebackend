@@ -5,6 +5,214 @@ from django.contrib.auth.models import User
 from .models import Notification, PushNotificationToken, GeofenceAlert
 
 
+# ── Generic notification helper ───────────────────────────────────────────────
+
+def create_notification(user, type_notif, titre, message, lien='', extra_data=None):
+    """
+    Crée une notification in-app pour un utilisateur donné.
+    Peut être importée et appelée depuis n'importe quelle vue/signal du projet.
+
+    Paramètres:
+        user        : instance django User (destinataire)
+        type_notif  : str — clé de type (voir TYPE_MAP ci-dessous)
+        titre       : str — titre court affiché dans la liste
+        message     : str — corps du message
+        lien        : str — URL relative frontend pour le lien "voir"
+        extra_data  : dict optionnel — données supplémentaires sérialisées en JSON
+
+    Retourne: instance Notification ou None en cas d'erreur
+    """
+    try:
+        notif = Notification.objects.create(
+            user=user,
+            type_notif=type_notif,
+            titre=titre,
+            contenu=message,
+            message=message,
+            lien=lien,
+            read=False,
+        )
+        return notif
+    except Exception as e:
+        print(f"[Notifications] Erreur création notification pour {user}: {e}")
+        return None
+
+
+def notify_users(users, type_notif, titre, message, lien=''):
+    """Envoie la même notification à une liste d'utilisateurs."""
+    results = []
+    for user in users:
+        n = create_notification(user, type_notif, titre, message, lien)
+        if n:
+            results.append(n)
+    return results
+
+
+# ── Diligences ────────────────────────────────────────────────────────────────
+
+def notify_nouvelle_diligence(diligence):
+    """Notifie les impactés + superviseurs d'une nouvelle diligence."""
+    from .models import Diligence
+    try:
+        titre = f"Nouvelle diligence : {diligence.objet or diligence.reference or '—'}"
+        message = f"Une nouvelle diligence a été créée et vous a été assignée."
+        lien = f"/diligences"
+        users_to_notify = set()
+
+        if diligence.responsable and diligence.responsable != diligence.createur:
+            users_to_notify.add(diligence.responsable)
+        # Notifier aussi les imputés
+        for imp in diligence.imputations.select_related('agent').all():
+            if imp.agent and imp.agent != diligence.createur:
+                users_to_notify.add(imp.agent)
+
+        notify_users(list(users_to_notify), 'nouvelle_diligence', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_nouvelle_diligence: {e}")
+
+
+def notify_diligence_validated(diligence):
+    """Notifie le créateur que sa diligence a été validée."""
+    try:
+        titre = f"Diligence validée : {diligence.objet or diligence.reference or '—'}"
+        message = "Votre diligence a été validée."
+        lien = "/diligences"
+        if diligence.createur:
+            create_notification(diligence.createur, 'document_valide', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_diligence_validated: {e}")
+
+
+def notify_diligence_rappel(diligence):
+    """Rappel d'échéance imminente sur une diligence."""
+    try:
+        titre = f"Délai imminant : {diligence.objet or diligence.reference or '—'}"
+        message = f"Le délai de cette diligence est proche. Date limite : {diligence.date_limite}"
+        lien = "/diligences"
+        users = set()
+        if diligence.responsable:
+            users.add(diligence.responsable)
+        if diligence.createur:
+            users.add(diligence.createur)
+        notify_users(list(users), 'rappel_delai', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_diligence_rappel: {e}")
+
+
+# ── Courriers ─────────────────────────────────────────────────────────────────
+
+def notify_nouveau_courrier(courrier, recipient):
+    """Notifie un utilisateur qu'un courrier lui est imputable."""
+    try:
+        titre = f"Nouveau courrier : {courrier.objet or courrier.reference or '—'}"
+        message = "Un courrier vous a été imputable ou transmis."
+        lien = "/courriers"
+        create_notification(recipient, 'nouvelle_diligence', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_nouveau_courrier: {e}")
+
+
+# ── Congés & Absences ─────────────────────────────────────────────────────────
+
+def notify_conge_soumis(demande):
+    """Notifie les approbateurs d'une nouvelle demande de congé."""
+    try:
+        from django.contrib.auth.models import User as DjUser
+        titre = f"Nouvelle demande de congé — {demande.user.get_full_name() or demande.user.username}"
+        message = f"Type : {demande.type_conge} | Du {demande.date_debut} au {demande.date_fin}"
+        lien = "/personnel/conges"
+        approbateurs = DjUser.objects.filter(
+            profile__role__in=['ADMIN', 'DIRECTEUR', 'CHEF_SERVICE']
+        )
+        notify_users(list(approbateurs), 'validation_requise', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_conge_soumis: {e}")
+
+
+def notify_conge_decision(demande):
+    """Notifie l'agent de la décision sur sa demande de congé."""
+    try:
+        statut = demande.statut
+        titre = f"Congé {'approuvé' if statut == 'approuve' else 'refusé'}"
+        message = f"Votre demande de congé du {demande.date_debut} au {demande.date_fin} a été {statut}."
+        lien = "/personnel/conges"
+        type_notif = 'document_valide' if statut == 'approuve' else 'changement_statut'
+        create_notification(demande.user, type_notif, titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_conge_decision: {e}")
+
+
+def notify_absence_soumise(demande):
+    """Notifie les approbateurs d'une demande d'absence."""
+    try:
+        from django.contrib.auth.models import User as DjUser
+        titre = f"Demande d'absence — {demande.user.get_full_name() or demande.user.username}"
+        message = f"Motif : {demande.motif} | Date : {demande.date_debut}"
+        lien = "/personnel/absences"
+        approbateurs = DjUser.objects.filter(
+            profile__role__in=['ADMIN', 'DIRECTEUR', 'CHEF_SERVICE']
+        )
+        notify_users(list(approbateurs), 'validation_requise', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_absence_soumise: {e}")
+
+
+def notify_absence_decision(demande):
+    """Notifie l'agent de la décision sur sa demande d'absence."""
+    try:
+        statut = demande.statut
+        titre = f"Absence {'approuvée' if statut == 'approuve' else 'refusée'}"
+        message = f"Votre demande d'absence du {demande.date_debut} a été {statut}."
+        lien = "/personnel/absences"
+        type_notif = 'document_valide' if statut == 'approuve' else 'changement_statut'
+        create_notification(demande.user, type_notif, titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_absence_decision: {e}")
+
+
+# ── Projets & Tâches ──────────────────────────────────────────────────────────
+
+def notify_tache_assignee(tache, assigned_user):
+    """Notifie un agent qu'une tâche lui a été assignée."""
+    try:
+        titre = f"Nouvelle tâche assignée : {tache.titre}"
+        message = f"Une tâche vous a été assignée dans le projet : {getattr(tache, 'projet', None) and tache.projet.nom or '—'}"
+        lien = "/projets"
+        create_notification(assigned_user, 'assignation', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_tache_assignee: {e}")
+
+
+def notify_tache_terminee(tache):
+    """Notifie le chef de projet qu'une tâche est terminée."""
+    try:
+        if not hasattr(tache, 'projet') or not tache.projet:
+            return
+        titre = f"Tâche terminée : {tache.titre}"
+        message = f"La tâche «{tache.titre}» a été marquée comme terminée."
+        lien = "/projets"
+        chef = getattr(tache.projet, 'responsable', None) or getattr(tache.projet, 'chef', None)
+        if chef:
+            create_notification(chef, 'tache_terminee', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_tache_terminee: {e}")
+
+
+# ── Réunions ──────────────────────────────────────────────────────────────────
+
+def notify_invitation_reunion(reunion, participant):
+    """Notifie un participant d'une invitation à une réunion."""
+    try:
+        titre = f"Invitation : {reunion.titre or reunion.objet or 'Réunion'}"
+        message = f"Vous êtes invité(e) à une réunion le {reunion.date_reunion or '—'}."
+        lien = "/agenda"
+        create_notification(participant, 'assignation', titre, message, lien)
+    except Exception as e:
+        print(f"[Notifications] notify_invitation_reunion: {e}")
+
+
+# ── Géofencing (existant, conservé) ──────────────────────────────────────────
+
 def send_geofence_notification(user, alert):
     """Envoyer une notification dans l'application pour une alerte de géofencing"""
     try:

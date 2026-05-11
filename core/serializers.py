@@ -138,7 +138,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
 # Service déjà importé en haut
 
 class ServiceSerializer(serializers.ModelSerializer):
-    sous_direction = serializers.PrimaryKeyRelatedField(read_only=True)
+    sous_direction = serializers.PrimaryKeyRelatedField(
+        queryset=SousDirection.objects.all(), allow_null=True, required=False
+    )
     sous_direction_nom = serializers.CharField(source='sous_direction.nom', read_only=True)
     direction = serializers.SerializerMethodField()
 

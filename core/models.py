@@ -231,6 +231,8 @@ class Site(models.Model):
     logo = models.ImageField(upload_to='sites/logos/', null=True, blank=True)
     fuseau_horaire = models.CharField(max_length=50, default='Africa/Abidjan')
     est_actif = models.BooleanField(default=True)
+    org_unit_key = models.CharField(max_length=255, blank=True, null=True, help_text="Clé de l'unité organisationnelle liée (organigramme)")
+    org_unit_label = models.CharField(max_length=255, blank=True, null=True, help_text="Libellé de l'unité organisationnelle liée")
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
     rayon_pointage = models.IntegerField(default=200, help_text='Rayon en mètres pour le pointage GPS')
