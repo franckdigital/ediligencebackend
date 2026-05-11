@@ -293,6 +293,33 @@ class UserProfileView(APIView):
             except Agent.DoesNotExist:
                 pass
             
+            # Récupérer le site du profil utilisateur
+            site_obj = None
+            try:
+                if profile.site:
+                    s = profile.site
+                    # Paliers actifs avec coordonnées GPS
+                    paliers = []
+                    for p in s.paliers.filter(est_actif=True).order_by('ordre'):
+                        paliers.append({
+                            'id': p.id,
+                            'nom': p.nom,
+                            'latitude': str(p.latitude) if p.latitude else None,
+                            'longitude': str(p.longitude) if p.longitude else None,
+                            'rayon_pointage': p.rayon_pointage,
+                        })
+                    site_obj = {
+                        'id': s.id,
+                        'nom': s.nom,
+                        'code': s.code,
+                        'latitude': str(s.latitude) if s.latitude else None,
+                        'longitude': str(s.longitude) if s.longitude else None,
+                        'rayon_pointage': s.rayon_pointage,
+                        'paliers': paliers,
+                    }
+            except Exception:
+                pass
+
             data = {
                 'id': user.id,
                 'username': user.username,
@@ -304,6 +331,7 @@ class UserProfileView(APIView):
                 'service': profile.service.id if profile.service else None,
                 'direction': profile.direction.id if profile.direction else None,
                 'bureau_obj': bureau_obj,
+                'site_obj': site_obj,
                 'notifications_count': 0  # Par défaut 0 notifications
             }
             # Vérifier si les notifications sont configurées
@@ -1632,45 +1660,70 @@ class PresenceViewSet(viewsets.ModelViewSet):
         localisation_valide = False
         commentaire_final = commentaire or ''
 
-        # Validation GPS par rapport au bureau
-        from .models import Bureau
-        bureau = agent_obj.bureau if agent_obj.bureau else Bureau.objects.filter(nom__icontains='Principal').first()
-        if not bureau:
-            bureau = Bureau.objects.first()  # Fallback sur le premier bureau
-            
-        if bureau and bureau.latitude_centre and bureau.longitude_centre:
+        # ── Résolution du point de référence GPS ──────────────────────────────
+        # Priorité 1 : bureau explicitement assigné à l'Agent
+        # Priorité 2 : palier actif du site du UserProfile (coordonnées GPS)
+        # Priorité 3 : coordonnées GPS du site du UserProfile
+        # Priorité 4 : aucun fallback "Bureau Principal" pour éviter les faux positifs
+        from .models import Bureau, SitePalier
+
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 6371000
+            phi1 = radians(lat1); phi2 = radians(lat2)
+            dphi = radians(lat2 - lat1); dlambda = radians(lon2 - lon1)
+            a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2)**2
+            return R * 2 * asin(sqrt(a))
+
+        ref_lat = ref_lon = ref_rayon = None
+        ref_nom = None
+
+        if agent_obj.bureau and agent_obj.bureau.latitude_centre and agent_obj.bureau.longitude_centre:
+            b = agent_obj.bureau
+            ref_lat  = float(b.latitude_centre)
+            ref_lon  = float(b.longitude_centre)
+            ref_rayon = float(b.rayon_metres) if b.rayon_metres else 100.0
+            ref_nom  = b.nom
+        else:
+            # Chercher le site via UserProfile
+            user_profile = getattr(agent_user, 'profile', None)
+            user_site = getattr(user_profile, 'site', None) if user_profile else None
+            if user_site:
+                # Essayer d'abord les paliers actifs avec coordonnées GPS
+                palier = SitePalier.objects.filter(
+                    site=user_site, est_actif=True,
+                    latitude__isnull=False, longitude__isnull=False
+                ).order_by('ordre').first()
+                if palier:
+                    ref_lat   = float(palier.latitude)
+                    ref_lon   = float(palier.longitude)
+                    ref_rayon = float(palier.rayon_pointage)
+                    ref_nom   = f"{user_site.nom} — {palier.nom}"
+                elif user_site.latitude and user_site.longitude:
+                    ref_lat   = float(user_site.latitude)
+                    ref_lon   = float(user_site.longitude)
+                    ref_rayon = float(user_site.rayon_pointage)
+                    ref_nom   = user_site.nom
+
+        if ref_lat is not None and ref_lon is not None:
             try:
                 lat1 = float(latitude)
                 lon1 = float(longitude)
-                lat2 = float(bureau.latitude_centre)
-                lon2 = float(bureau.longitude_centre)
-                rayon = float(bureau.rayon_metres) if bureau.rayon_metres else 100.0  # Rayon configurable
-
-                # Haversine
-                def haversine(lat1, lon1, lat2, lon2):
-                    R = 6371000  # m
-                    phi1 = radians(lat1)
-                    phi2 = radians(lat2)
-                    dphi = radians(lat2 - lat1)
-                    dlambda = radians(lon2 - lon1)
-                    a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2)**2
-                    c = 2*asin(sqrt(a))
-                    return R * c
-
-                distance = haversine(lat1, lon1, lat2, lon2)
-                if distance > rayon:
-                    logger.warning('[PresenceViewSet] Hors zone autorisée: %.1f m > %.1f m', distance, rayon)
-                    raise ValidationError({'error': f'Vous êtes hors de la zone autorisée pour l’enregistrement de présence ({distance:.1f} m > {rayon:.1f} m). Veuillez vous rapprocher de votre bureau.'})
-                logger.warning('[PresenceViewSet] Distance calculée: %s m', distance)
-                if distance > rayon:
-                    logger.warning('[PresenceViewSet] Hors zone autorisée: %.1f m > %.1f m', distance, rayon)
-                    raise ValidationError(f"Vous êtes hors de la zone autorisée ({distance:.1f} m > {rayon:.1f} m)")
+                distance = haversine(lat1, lon1, ref_lat, ref_lon)
+                logger.warning('[PresenceViewSet] Distance vers %s : %.1f m (rayon : %.1f m)', ref_nom, distance, ref_rayon)
+                if distance > ref_rayon:
+                    raise ValidationError({'error': (
+                        f"Vous êtes hors de la zone autorisée pour {ref_nom} "
+                        f"({distance:.1f} m > {ref_rayon:.1f} m). "
+                        f"Veuillez vous rapprocher de votre lieu de travail."
+                    )})
                 localisation_valide = True
+            except ValidationError:
+                raise
             except Exception as e:
-                logger.error('[PresenceViewSet] Erreur lors de la validation GPS: %s', str(e))
+                logger.error('[PresenceViewSet] Erreur validation GPS: %s', str(e))
                 raise ValidationError(f"Erreur lors de la validation GPS : {str(e)}")
         else:
-            commentaire_final += " [Avertissement : aucune configuration GPS de zone autorisée sur votre profil Agent.]"
+            commentaire_final += " [Avertissement : aucune configuration GPS de zone autorisée sur votre profil.]"
 
         # Vérification de l'empreinte du téléphone
         logger.info('[PresenceViewSet] Device fingerprint reçu: %s', device_fingerprint)
