@@ -1370,6 +1370,80 @@ class MaPresenceDuJourView(APIView):
             # Aucune présence trouvée pour aujourd'hui
             return Response(None, status=status.HTTP_404_NOT_FOUND)
 
+class MesPresencesView(APIView):
+    """Retourne l'historique de présence de l'utilisateur connecté"""
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        user = request.user
+        try:
+            agent = Agent.objects.get(user=user)
+        except Agent.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        qs = Presence.objects.filter(agent=agent)
+
+        mois = request.query_params.get('mois')  # format: YYYY-MM
+        if mois:
+            try:
+                year_str, month_str = mois.split('-')
+                qs = qs.filter(
+                    date_presence__year=int(year_str),
+                    date_presence__month=int(month_str)
+                )
+            except (ValueError, AttributeError):
+                pass
+
+        qs = qs.order_by('-date_presence')
+
+        data = []
+        for p in qs:
+            arrivee = str(p.heure_arrivee) if p.heure_arrivee else None
+            depart = str(p.heure_depart) if p.heure_depart else None
+            # Calculer la durée en minutes
+            duree = None
+            if arrivee and depart:
+                try:
+                    ah, am = int(arrivee[:2]), int(arrivee[3:5])
+                    dh, dm = int(depart[:2]), int(depart[3:5])
+                    duree = (dh * 60 + dm) - (ah * 60 + am)
+                    if duree < 0:
+                        duree = None
+                except (ValueError, IndexError):
+                    pass
+            # Retard si arrivée après 8h00
+            est_en_retard = False
+            if arrivee:
+                try:
+                    ah, am = int(arrivee[:2]), int(arrivee[3:5])
+                    est_en_retard = (ah * 60 + am) > (8 * 60)
+                except (ValueError, IndexError):
+                    pass
+
+            bureau_nom = None
+            if agent.bureau:
+                bureau_nom = agent.bureau.nom
+            elif hasattr(user, 'profile') and user.profile.site:
+                bureau_nom = user.profile.site.nom
+
+            data.append({
+                'id': p.id,
+                'date': str(p.date_presence),
+                'heure_arrivee': arrivee,
+                'heure_depart': depart,
+                'duree_minutes': duree,
+                'statut': p.statut,
+                'est_en_retard': est_en_retard,
+                'bureau_nom': bureau_nom,
+            })
+
+        logger.info(f'[MesPresencesView] {user.username} — {len(data)} entrées pour mois={mois}')
+        return Response(data)
+
+
 # Imports déjà présents en haut du fichier - suppression des doublons
 
 # PresenceFingerprintView removed - using simple button presence now

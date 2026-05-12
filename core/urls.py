@@ -8,7 +8,7 @@ from .views import (
     ImputationAccessViewSet, CourrierImputationViewSet, ImputationFileViewSet,
     UserDiligenceCommentViewSet, UserDiligenceInstructionViewSet,
     DemandeCongeViewSet, DemandeAbsenceViewSet, UpdatePresenceStatusView, DeleteUserView,
-    CustomTokenObtainPairView, MaPresenceDuJourView, SimplePresenceView, AgentRegistrationView,
+    CustomTokenObtainPairView, MaPresenceDuJourView, MesPresencesView, SimplePresenceView, AgentRegistrationView,
     DiligenceDownloadFichierView, OccurrenceSpecialeViewSet, SiteViewSet, SitePalierViewSet
 )
 from .views_courrier_access import CourrierAccessViewSet
@@ -114,6 +114,7 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(serializer_class=MyTokenObtainPairSerializer), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('presence/ma-presence-du-jour/', MaPresenceDuJourView.as_view(), name='ma-presence-du-jour'),
+    path('presence/mes-presences/', MesPresencesView.as_view(), name='mes-presences'),
     # Fingerprint endpoints removed - using simple button presence now
     path('presence/simple/', SimplePresenceView.as_view(), name='simple-presence'),
     path('presence/<int:presence_id>/update-status/', UpdatePresenceStatusView.as_view(), name='update-presence-status'),
