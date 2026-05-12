@@ -19,13 +19,13 @@ class PresenceStatsAPIView(APIView):
         start = request.GET.get('start')
         end = request.GET.get('end')
         service_id = request.GET.get('service')
-        presences = Presence.objects.select_related('agent__profile', 'agent__profile__service', 'agent__profile__service__direction')
+        presences = Presence.objects.select_related('agent', 'agent__service', 'agent__service__direction')
         if start:
             presences = presences.filter(date_presence__gte=start)
         if end:
             presences = presences.filter(date_presence__lte=end)
         if service_id:
-            presences = presences.filter(agent__profile__service_id=service_id)
+            presences = presences.filter(agent__service_id=service_id)
         # Annotate duration
         presences = presences.annotate(
             duration=ExpressionWrapper(
@@ -42,10 +42,10 @@ class PresenceStatsAPIView(APIView):
             if uid not in stats:
                 stats[uid] = {
                     'user_id': uid,
-                    'last_name': p.agent.last_name,
-                    'first_name': p.agent.first_name,
-                    'service': getattr(p.agent.profile.service, 'nom', ''),
-                    'direction': getattr(getattr(p.agent.profile.service, 'direction', None), 'nom', ''),
+                    'last_name': p.agent.nom,
+                    'first_name': p.agent.prenom or '',
+                    'service': getattr(p.agent.service, 'nom', '') if p.agent.service else '',
+                    'direction': getattr(getattr(p.agent.service, 'direction', None), 'nom', '') if p.agent.service else '',
                     'hours_per_day': 0,
                     'hours_per_week': 0,
                     'hours_per_month': 0,

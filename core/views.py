@@ -1685,18 +1685,18 @@ class PresenceViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        qs = Presence.objects.select_related('agent', 'agent__profile').all()
+        qs = Presence.objects.select_related('agent', 'agent__user__profile').all()
         site_id = get_site_id_for_request(self.request)
         if site_id:
-            qs = qs.filter(agent__profile__site_id=site_id)
+            qs = qs.filter(agent__user__profile__site_id=site_id)
         # Allow filtering by specific user
         user_id = self.request.query_params.get('user') or self.request.query_params.get('agent')
         if user_id:
             qs = qs.filter(agent_id=user_id)
         date_param = self.request.query_params.get('date')
         if date_param:
-            qs = qs.filter(date=date_param)
-        return qs.order_by('-date', '-heure_arrivee')
+            qs = qs.filter(date_presence=date_param)
+        return qs.order_by('-date_presence', '-heure_arrivee')
 
     def perform_create(self, serializer):
         import logging
@@ -1840,9 +1840,9 @@ class PresenceViewSet(viewsets.ModelViewSet):
         else:
             logger.warning('[PresenceViewSet] ⚠️ Aucune empreinte device reçue - restriction non appliquée')
 
-        logger.info('[PresenceViewSet] Création de la présence pour agent=%s', agent_user)
+        logger.info('[PresenceViewSet] Création de la présence pour agent=%s', agent_obj)
         serializer.save(
-            agent=agent_user,
+            agent=agent_obj,
             statut=statut,
             localisation_valide=localisation_valide,
             latitude=latitude,
