@@ -1596,7 +1596,29 @@ class SimplePresenceView(APIView):
                 message = 'Départ enregistré avec succès'
             
             presence.save()
-            
+
+            # --- Notification aux admins/supérieurs du même site ---
+            try:
+                from .models import Notification, UserProfile
+                agent_nom = f"{agent.prenom or ''} {agent.nom}".strip() or user.username
+                heure_str = current_time.strftime('%H:%M')
+                action_label = 'arrivée' if action == 'arrivee' else 'départ'
+                notif_message = f"Pointage {action_label} — {agent_nom} à {heure_str}"
+                # Notifier les admins et responsables du même site
+                admin_roles = ['ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR']
+                supervisors = User.objects.filter(
+                    profile__role__in=admin_roles
+                )
+                if user_site:
+                    supervisors = supervisors.filter(profile__site=user_site)
+                for supervisor in supervisors.exclude(id=user.id):
+                    Notification.objects.create(
+                        user=supervisor,
+                        message=notif_message,
+                    )
+            except Exception as notif_err:
+                logger.warning(f'[SimplePresenceView] Notification error: {notif_err}')
+
             return Response({
                 'success': True,
                 'message': message,
