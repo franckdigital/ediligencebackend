@@ -1661,11 +1661,11 @@ class PresenceViewSet(viewsets.ModelViewSet):
         commentaire_final = commentaire or ''
 
         # ── Résolution du point de référence GPS ──────────────────────────────
-        # Priorité 1 : bureau explicitement assigné à l'Agent
-        # Priorité 2 : palier actif du site du UserProfile (coordonnées GPS)
-        # Priorité 3 : coordonnées GPS du site du UserProfile
-        # Priorité 4 : aucun fallback "Bureau Principal" pour éviter les faux positifs
-        from .models import Bureau, SitePalier
+        # Priorité 1 : palier actif du site (UserProfile.site) avec coordonnées GPS
+        # Priorité 2 : coordonnées GPS directes du site (UserProfile.site)
+        # Priorité 3 : bureau de l'Agent en fallback (seulement si aucun GPS sur le site)
+        # Cette logique est identique à celle du mobile (gpsRef)
+        from .models import SitePalier
 
         def haversine(lat1, lon1, lat2, lon2):
             R = 6371000
@@ -1677,32 +1677,36 @@ class PresenceViewSet(viewsets.ModelViewSet):
         ref_lat = ref_lon = ref_rayon = None
         ref_nom = None
 
-        if agent_obj.bureau and agent_obj.bureau.latitude_centre and agent_obj.bureau.longitude_centre:
+        # Récupérer le site depuis UserProfile
+        user_profile = getattr(agent_user, 'profile', None)
+        user_site = getattr(user_profile, 'site', None) if user_profile else None
+
+        if user_site:
+            # Priorité 1 : palier actif avec coordonnées GPS
+            palier = SitePalier.objects.filter(
+                site=user_site, est_actif=True,
+                latitude__isnull=False, longitude__isnull=False
+            ).order_by('ordre').first()
+            if palier:
+                ref_lat   = float(palier.latitude)
+                ref_lon   = float(palier.longitude)
+                ref_rayon = float(palier.rayon_pointage)
+                ref_nom   = f"{user_site.nom} — {palier.nom}"
+            elif user_site.latitude and user_site.longitude:
+                # Priorité 2 : coordonnées GPS directes du site
+                ref_lat   = float(user_site.latitude)
+                ref_lon   = float(user_site.longitude)
+                ref_rayon = float(user_site.rayon_pointage)
+                ref_nom   = user_site.nom
+
+        # Priorité 3 : bureau de l'Agent (fallback uniquement si pas de GPS sur le site)
+        if ref_lat is None and agent_obj.bureau and agent_obj.bureau.latitude_centre and agent_obj.bureau.longitude_centre:
             b = agent_obj.bureau
-            ref_lat  = float(b.latitude_centre)
-            ref_lon  = float(b.longitude_centre)
+            ref_lat   = float(b.latitude_centre)
+            ref_lon   = float(b.longitude_centre)
             ref_rayon = float(b.rayon_metres) if b.rayon_metres else 100.0
-            ref_nom  = b.nom
-        else:
-            # Chercher le site via UserProfile
-            user_profile = getattr(agent_user, 'profile', None)
-            user_site = getattr(user_profile, 'site', None) if user_profile else None
-            if user_site:
-                # Essayer d'abord les paliers actifs avec coordonnées GPS
-                palier = SitePalier.objects.filter(
-                    site=user_site, est_actif=True,
-                    latitude__isnull=False, longitude__isnull=False
-                ).order_by('ordre').first()
-                if palier:
-                    ref_lat   = float(palier.latitude)
-                    ref_lon   = float(palier.longitude)
-                    ref_rayon = float(palier.rayon_pointage)
-                    ref_nom   = f"{user_site.nom} — {palier.nom}"
-                elif user_site.latitude and user_site.longitude:
-                    ref_lat   = float(user_site.latitude)
-                    ref_lon   = float(user_site.longitude)
-                    ref_rayon = float(user_site.rayon_pointage)
-                    ref_nom   = user_site.nom
+            # Afficher le nom du site même si on utilise les coords du bureau
+            ref_nom   = user_site.nom if user_site else b.nom
 
         if ref_lat is not None and ref_lon is not None:
             try:
