@@ -1397,20 +1397,11 @@ class SimplePresenceView(APIView):
         
         if not latitude or not longitude:
             return Response({'error': 'Position GPS requise'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Correction automatique des coordonnées GPS aberrantes
-        from .gps_correction import correct_gps_coordinates
-        gps_correction = correct_gps_coordinates(latitude, longitude, user)
-        
-        # Utiliser les coordonnées corrigées
-        corrected_latitude = gps_correction['latitude']
-        corrected_longitude = gps_correction['longitude']
-        gps_corrected = gps_correction['corrected']
-        gps_message = gps_correction['message']
-        
-        if gps_corrected:
-            logger.warning(f'[SimplePresenceView] GPS corrigé pour {user.username}: {latitude},{longitude} -> {corrected_latitude},{corrected_longitude}')
-        
+
+        # Coordonnées réelles — aucune correction automatique
+        corrected_latitude = latitude
+        corrected_longitude = longitude
+
         try:
             # Récupérer ou créer l'agent automatiquement
             agent, created = Agent.objects.get_or_create(
@@ -1422,52 +1413,70 @@ class SimplePresenceView(APIView):
                     'poste': getattr(user.profile, 'role', 'AGENT') if hasattr(user, 'profile') else 'AGENT'
                 }
             )
-            
-            # Vérification de la distance par rapport au bureau
-            from .models import Bureau
+
+            # ── Résolution du point de référence GPS ──────────────────────────
+            # Priorité 1 : palier actif du site (UserProfile.site)
+            # Priorité 2 : coordonnées GPS directes du site
+            # Priorité 3 : bureau de l'Agent (fallback)
+            # Identique à la logique du mobile (gpsRef)
+            from .models import SitePalier
             from math import radians, cos, sin, asin, sqrt
-            
-            # Récupérer le bureau de l'agent ou le bureau principal
-            bureau = agent.bureau if agent.bureau else Bureau.objects.filter(nom__icontains='Principal').first()
-            if not bureau:
-                bureau = Bureau.objects.first()  # Fallback sur le premier bureau
-            
-            # Si l'agent n'a pas de bureau assigné, l'assigner maintenant
-            if bureau and not agent.bureau:
-                agent.bureau = bureau
-                agent.save()
-                logger.info(f'[SimplePresenceView] Bureau {bureau.nom} assigné automatiquement à {agent.user.username}')
-            
-            if bureau and bureau.latitude_centre and bureau.longitude_centre:
-                # Fonction de calcul de distance (Haversine)
-                def haversine(lat1, lon1, lat2, lon2):
-                    R = 6371000  # Rayon de la Terre en mètres
-                    phi1 = radians(lat1)
-                    phi2 = radians(lat2)
-                    dphi = radians(lat2 - lat1)
-                    dlambda = radians(lon2 - lon1)
-                    a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2)**2
-                    c = 2*asin(sqrt(a))
-                    return R * c
-                
-                # Calculer la distance avec les coordonnées corrigées
+
+            def haversine(lat1, lon1, lat2, lon2):
+                R = 6371000
+                phi1 = radians(lat1); phi2 = radians(lat2)
+                dphi = radians(lat2 - lat1); dlambda = radians(lon2 - lon1)
+                a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*sin(dlambda/2)**2
+                return R * 2 * asin(sqrt(a))
+
+            ref_lat = ref_lon = ref_rayon = None
+            ref_nom = None
+
+            user_profile = getattr(user, 'profile', None)
+            user_site = getattr(user_profile, 'site', None) if user_profile else None
+
+            if user_site:
+                # Priorité 1 : palier actif avec coordonnées GPS
+                palier = SitePalier.objects.filter(
+                    site=user_site, est_actif=True,
+                    latitude__isnull=False, longitude__isnull=False
+                ).order_by('ordre').first()
+                if palier:
+                    ref_lat   = float(palier.latitude)
+                    ref_lon   = float(palier.longitude)
+                    ref_rayon = float(palier.rayon_pointage)
+                    ref_nom   = f"{user_site.nom} — {palier.nom}"
+                elif user_site.latitude and user_site.longitude:
+                    # Priorité 2 : coordonnées GPS directes du site
+                    ref_lat   = float(user_site.latitude)
+                    ref_lon   = float(user_site.longitude)
+                    ref_rayon = float(user_site.rayon_pointage)
+                    ref_nom   = user_site.nom
+
+            # Priorité 3 : bureau de l'Agent (fallback)
+            if ref_lat is None and agent.bureau and agent.bureau.latitude_centre and agent.bureau.longitude_centre:
+                b = agent.bureau
+                ref_lat   = float(b.latitude_centre)
+                ref_lon   = float(b.longitude_centre)
+                ref_rayon = float(b.rayon_metres) if b.rayon_metres else 100.0
+                ref_nom   = user_site.nom if user_site else b.nom
+
+            if ref_lat is not None and ref_lon is not None:
                 distance = haversine(
                     float(corrected_latitude), float(corrected_longitude),
-                    float(bureau.latitude_centre), float(bureau.longitude_centre)
+                    ref_lat, ref_lon
                 )
-                
-                # Rayon autorisé (50-100m selon les paramètres du bureau)
-                rayon_autorise = bureau.rayon_metres if bureau.rayon_metres else 100
-                
-                logger.info(f'[SimplePresenceView] Distance calculée: {distance:.1f}m, Rayon autorisé: {rayon_autorise}m')
-                
-                if distance > rayon_autorise:
+                logger.info(f'[SimplePresenceView] Distance vers {ref_nom}: {distance:.1f}m (rayon: {ref_rayon}m)')
+
+                if distance > ref_rayon:
                     return Response({
-                        'error': f'Vous êtes trop loin du bureau pour pointer ({distance:.1f}m > {rayon_autorise}m). Veuillez vous rapprocher.',
+                        'error': f'Vous êtes hors de la zone autorisée pour {ref_nom} ({distance:.1f}m > {ref_rayon:.1f}m). Veuillez vous rapprocher de votre lieu de travail.',
                         'distance': round(distance, 1),
-                        'rayon_autorise': rayon_autorise,
-                        'bureau': bureau.nom
+                        'rayon_autorise': ref_rayon,
+                        'site': ref_nom
                     }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                logger.warning(f'[SimplePresenceView] Aucune configuration GPS pour {user.username} — pointage sans validation géographique')
             
             if created:
                 logger.info(f'[SimplePresenceView] Agent créé automatiquement pour {user.username}')
@@ -1514,8 +1523,7 @@ class SimplePresenceView(APIView):
             
             presence.save()
             
-            # Préparer la réponse avec information de correction GPS
-            response_data = {
+            return Response({
                 'success': True,
                 'message': message,
                 'presence': {
@@ -1524,18 +1532,7 @@ class SimplePresenceView(APIView):
                     'heure_depart': presence.heure_depart,
                     'statut': presence.statut
                 }
-            }
-            
-            # Ajouter l'information de correction GPS si applicable
-            if gps_corrected:
-                response_data['gps_correction'] = {
-                    'corrected': True,
-                    'message': gps_message,
-                    'original_coordinates': {'latitude': latitude, 'longitude': longitude},
-                    'corrected_coordinates': {'latitude': corrected_latitude, 'longitude': corrected_longitude}
-                }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
             
         except Agent.DoesNotExist:
             return Response({'error': 'Profil agent non trouvé'}, status=status.HTTP_404_NOT_FOUND)
