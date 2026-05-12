@@ -1685,7 +1685,11 @@ class PresenceViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        qs = Presence.objects.select_related('agent', 'agent__user__profile').all()
+        qs = Presence.objects.select_related(
+            'agent', 'agent__user__profile',
+            'agent__service', 'agent__service__sous_direction',
+            'agent__service__sous_direction__direction'
+        ).all()
         site_id = get_site_id_for_request(self.request)
         if site_id:
             qs = qs.filter(agent__user__profile__site_id=site_id)
