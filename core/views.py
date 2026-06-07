@@ -2230,15 +2230,29 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
 
         return Response({'message': 'Demande rejetée'})
     
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def telecharger_pdf(self, request, pk=None):
-        """Télécharge la demande de congé en PDF"""
-        demande = self.get_object()
-        
-        # Générer le PDF
+        """Télécharge la demande de congé en PDF — supporte ?token= pour téléchargement navigateur."""
+        user = request.user
+        if not user.is_authenticated:
+            token_param = request.query_params.get('token')
+            if token_param:
+                try:
+                    from rest_framework_simplejwt.tokens import AccessToken
+                    access_token = AccessToken(token_param)
+                    user = User.objects.get(id=access_token['user_id'])
+                except Exception:
+                    return Response({'detail': 'Token invalide.'}, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                return Response({'detail': 'Non authentifié.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        demande = get_object_or_404(DemandeConge, pk=pk)
+        if not (user.is_staff or user == demande.demandeur or
+                (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR', 'CHEF_SERVICE', 'SOUS_DIRECTEUR', 'SUPERIEUR'])):
+            return Response({'detail': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
+
         buffer = generate_conge_pdf(demande)
         filename = f"demande_conge_{demande.demandeur.username}_{demande.date_creation.strftime('%Y%m%d')}.pdf"
-        
         return create_pdf_response(buffer, filename)
 
 
@@ -2493,15 +2507,29 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
 
         return Response({'message': 'Demande rejetée'})
     
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def telecharger_pdf(self, request, pk=None):
-        """Télécharge la demande d'absence en PDF"""
-        demande = self.get_object()
-        
-        # Générer le PDF
+        """Télécharge la demande d'absence en PDF — supporte ?token= pour téléchargement navigateur."""
+        user = request.user
+        if not user.is_authenticated:
+            token_param = request.query_params.get('token')
+            if token_param:
+                try:
+                    from rest_framework_simplejwt.tokens import AccessToken
+                    access_token = AccessToken(token_param)
+                    user = User.objects.get(id=access_token['user_id'])
+                except Exception:
+                    return Response({'detail': 'Token invalide.'}, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                return Response({'detail': 'Non authentifié.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        demande = get_object_or_404(DemandeAbsence, pk=pk)
+        if not (user.is_staff or user == demande.demandeur or
+                (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR', 'CHEF_SERVICE', 'SOUS_DIRECTEUR', 'SUPERIEUR'])):
+            return Response({'detail': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
+
         buffer = generate_absence_pdf(demande)
         filename = f"demande_absence_{demande.demandeur.username}_{demande.created_at.strftime('%Y%m%d')}.pdf"
-        
         return create_pdf_response(buffer, filename)
 
 
