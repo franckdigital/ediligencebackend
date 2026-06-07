@@ -729,6 +729,46 @@ class DiligenceViewSet(viewsets.ModelViewSet):
         # Note: If you want to be more restrictive and only add ImputationAccess for non-admins, adjust logic above.
 
 
+    @action(detail=True, methods=['post'], url_path='changer_statut',
+            permission_classes=[permissions.IsAuthenticated],
+            authentication_classes=[JWTAuthentication])
+    def changer_statut(self, request, pk=None):
+        """Changer le statut d'une diligence."""
+        diligence = self.get_object()
+        nouveau_statut = request.data.get('statut')
+        statuts_valides = [c[0] for c in Diligence.STATUT_CHOICES]
+        if not nouveau_statut:
+            return Response({'error': 'Le champ statut est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if nouveau_statut not in statuts_valides:
+            return Response({'error': f'Statut invalide. Valeurs possibles : {", ".join(statuts_valides)}'}, status=status.HTTP_400_BAD_REQUEST)
+        ancien_statut = diligence.statut
+        diligence.statut = nouveau_statut
+        if nouveau_statut == 'termine':
+            from django.utils import timezone as tz
+            diligence.validated_at = tz.now()
+            diligence.validated_by = request.user
+        elif nouveau_statut == 'archivee':
+            from django.utils import timezone as tz
+            diligence.archived_at = tz.now()
+            diligence.archived_by = request.user
+        diligence.save()
+        return Response({'message': 'Statut mis à jour.', 'ancien_statut': ancien_statut, 'nouveau_statut': nouveau_statut})
+
+    @action(detail=True, methods=['post'], url_path='changer_progression',
+            permission_classes=[permissions.IsAuthenticated],
+            authentication_classes=[JWTAuthentication])
+    def changer_progression(self, request, pk=None):
+        """Mettre à jour le pourcentage d'avancement d'une diligence."""
+        diligence = self.get_object()
+        try:
+            pct = float(request.data.get('pourcentage_avancement', 0))
+        except (TypeError, ValueError):
+            return Response({'error': 'Valeur invalide pour pourcentage_avancement.'}, status=status.HTTP_400_BAD_REQUEST)
+        pct = max(0.0, min(100.0, pct))
+        diligence.pourcentage_avancement = pct
+        diligence.save(update_fields=['pourcentage_avancement'])
+        return Response({'message': 'Progression mise à jour.', 'pourcentage_avancement': float(pct)})
+
     def create(self, request, *args, **kwargs):
         # Vérifier les permissions de création
         user = request.user
@@ -1948,17 +1988,15 @@ class UserDiligenceCommentViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        # Mettre à jour ou créer le commentaire
         diligence = serializer.validated_data['diligence']
-        user = serializer.validated_data['user']
+        user = serializer.validated_data.get('user', self.request.user)
         comment = serializer.validated_data['comment']
-        
         obj, created = UserDiligenceComment.objects.update_or_create(
             diligence=diligence,
             user=user,
             defaults={'comment': comment}
         )
-        return obj
+        serializer.instance = obj
 
 
 class UserDiligenceInstructionViewSet(viewsets.ModelViewSet):

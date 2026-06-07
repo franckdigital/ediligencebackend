@@ -1015,6 +1015,9 @@ class DiligenceSerializer(serializers.ModelSerializer):
 
     def get_fichier_joint_url(self, obj):
         if obj.fichier_joint:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.fichier_joint.url)
             return obj.fichier_joint.url
         return None
     
@@ -1330,6 +1333,7 @@ class ProjetSerializer(serializers.ModelSerializer):
 class UserDiligenceCommentSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.username', read_only=True)
     diligence_reference = serializers.CharField(source='diligence.reference_courrier', read_only=True)
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
 
     class Meta:
         model = UserDiligenceComment
