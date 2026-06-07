@@ -210,25 +210,10 @@ def notifier_creation_diligence(sender, instance, created, **kwargs):
         ref = getattr(instance, 'reference_courrier', None) or getattr(instance, 'objet', None) or '—'
         users_to_notify = set()
 
-        # Notifier le responsable
-        if instance.responsable:
-            users_to_notify.add(instance.responsable)
-            if instance.courrier:
-                creer_notification(
-                    utilisateur=instance.responsable,
-                    courrier=instance.courrier,
-                    type_notification='diligence_creee',
-                    titre='Nouvelle diligence créée',
-                    message=f'Une diligence a été créée pour le courrier {instance.courrier.reference}. Vous en êtes le responsable.',
-                    priorite='haute',
-                    cree_par=getattr(instance, 'created_by', None),
-                    metadata={'courrier_id': instance.courrier.id, 'diligence_id': instance.id}
-                )
-
         # Notifier les agents assignés
         for agent in instance.agents.all():
             users_to_notify.add(agent)
-            if instance.courrier and agent != instance.responsable:
+            if instance.courrier:
                 creer_notification(
                     utilisateur=agent,
                     courrier=instance.courrier,

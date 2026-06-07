@@ -131,7 +131,18 @@ class UserViewSet(viewsets.ModelViewSet):
         if roles:
             role_list = [r.strip() for r in roles.split(',') if r.strip()]
             qs = qs.filter(profile__role__in=role_list)
-        return qs.order_by('-date_joined')
+
+        search = self.request.query_params.get('search', '').strip()
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(username__icontains=search) |
+                Q(email__icontains=search)
+            )
+
+        return qs.order_by('last_name', 'first_name')
 
     def get_serializer_class(self):
         print(f"[DEBUG] UserViewSet using serializer: {UserSerializer}")
