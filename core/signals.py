@@ -3,6 +3,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 from .models import UserProfile
+from .notifications import send_push_to_user
 import secrets
 
 @receiver(post_save, sender=User)
@@ -77,16 +78,48 @@ def automatisation_tache(sender, instance, created, **kwargs):
 
         for destinataire in destinataires:
             try:
+                titre_notif = f"Tâche terminée : « {instance.titre} »"
+                msg_notif = (
+                    f"La tâche « {instance.titre} » a été marquée comme terminée"
+                    + (f" le {instance.date_fin_effective.strftime('%d/%m/%Y')}" if instance.date_fin_effective else "")
+                    + "."
+                )
                 Notification.objects.create(
                     user=destinataire,
                     type_notif='demande_approuvee',
-                    contenu=f"Tâche terminée : « {instance.titre} »",
-                    message=(
-                        f"La tâche « {instance.titre} » a été marquée comme terminée"
-                        + (f" le {instance.date_fin_effective.strftime('%d/%m/%Y')}" if instance.date_fin_effective else "")
-                        + "."
-                    ),
+                    contenu=titre_notif,
+                    message=msg_notif,
                     lien="/taches"
+                )
+                # Push mobile
+                send_push_to_user(
+                    user=destinataire,
+                    title=titre_notif,
+                    body=msg_notif,
+                    data={'type': 'tache_terminee', 'tache_id': str(instance.pk)}
+                )
+            except Exception:
+                pass
+
+    # 1b. Tâche nouvellement créée → notifier les agents assignés
+    if created:
+        assignes = list(instance.agents_taches.all()) if hasattr(instance, 'agents_taches') else []
+        if instance.responsable:
+            assignes.append(instance.responsable)
+        for agent in set(assignes):
+            try:
+                Notification.objects.create(
+                    user=agent,
+                    type_notif='assignation',
+                    contenu=f"Nouvelle tâche assignée : « {instance.titre} »",
+                    message=f"La tâche « {instance.titre} » vous a été assignée.",
+                    lien="/taches"
+                )
+                send_push_to_user(
+                    user=agent,
+                    title=f"Tâche assignée 📋",
+                    body=f"« {instance.titre} » vous a été assignée.",
+                    data={'type': 'tache_assignee', 'tache_id': str(instance.pk)}
                 )
             except Exception:
                 pass
@@ -116,16 +149,23 @@ def automatisation_tache(sender, instance, created, **kwargs):
             if not existe_deja:
                 try:
                     jours_retard = (aujourd_hui - instance.date_fin_prevue).days
+                    msg_retard = (
+                        f"La tâche « {instance.titre} » est en retard de {jours_retard} jour(s). "
+                        f"Date limite : {instance.date_fin_prevue.strftime('%d/%m/%Y')}. "
+                        f"État actuel : {instance.get_etat_display()}."
+                    )
                     Notification.objects.create(
                         user=destinataire,
                         type_notif='rappel',
                         contenu=f"RETARD — Tâche : « {instance.titre} »",
-                        message=(
-                            f"La tâche « {instance.titre} » est en retard de {jours_retard} jour(s). "
-                            f"Date limite : {instance.date_fin_prevue.strftime('%d/%m/%Y')}. "
-                            f"État actuel : {instance.get_etat_display()}."
-                        ),
+                        message=msg_retard,
                         lien="/taches"
+                    )
+                    send_push_to_user(
+                        user=destinataire,
+                        title=f"Tâche en retard ⚠️",
+                        body=f"« {instance.titre} » — {jours_retard} jour(s) de retard.",
+                        data={'type': 'tache_retard', 'tache_id': str(instance.pk)}
                     )
                 except Exception:
                     pass

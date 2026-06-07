@@ -24,7 +24,25 @@
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/api/users/\" -Method GET -UseBasicParsing -TimeoutSec 5 2>&1)",
       "Bash(node -e \"const fs = require\\('fs'\\); const f = fs.readFileSync\\('src/contexts/SiteContext.js','utf8'\\); console.log\\('OK:', f.includes\\('SiteProvider'\\) && f.includes\\('useSite'\\)\\);\")",
       "Bash(\".env\\\\Scripts\\\\python.exe\" manage.py makemigrations core --name add_site_palier)",
-      "Bash(\".env\\\\Scripts\\\\python.exe\" manage.py migrate)"
+      "Bash(\".env\\\\Scripts\\\\python.exe\" manage.py migrate)",
+      "Bash(npx expo *)",
+      "Bash(dir /s /b \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\\\\app\\\\*.tsx\")",
+      "Bash(npx tsc *)",
+      "PowerShell(cd \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\"; npx tsc --noEmit --skipLibCheck 2>&1 | Where-Object { $_ -match \"home\\\\.\" } | Select-Object -First 30)",
+      "PowerShell(cd \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\"; npx tsc --noEmit --skipLibCheck 2>&1 | Tee-Object -Variable tscOutput; $tscOutput | Where-Object { $_ -match \"home\\\\.\" } | Select-Object -First 20)",
+      "PowerShell(cd \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\"; npx tsc --noEmit --skipLibCheck 2>&1 | Where-Object { $_ -match \"projet|projets|Gantt|gantt\" } | Select-Object -First 30)",
+      "PowerShell(cd \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\"; $out = npx tsc --noEmit --skipLibCheck 2>&1; $out | Where-Object { $_ -match \"projets|projet\\\\[|GanttChart\" } | Select-Object -First 30)",
+      "PowerShell(cd \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\"; npx tsc --noEmit --skipLibCheck 2>&1 | Out-String | Select-String -Pattern \"\\(projet|Gantt\\)\" | ForEach-Object { $_.Line } | Select-Object -First 20)",
+      "PowerShell(cd \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\"; $r = \\(npx tsc --noEmit --skipLibCheck 2>&1 | Out-String\\); Write-Host \\($r.Substring\\(0, [Math]::Min\\($r.Length, 3000\\)\\)\\))",
+      "PowerShell(cd \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\eda-mobile\"; $r = \\(npx tsc --noEmit --skipLibCheck 2>&1 | Out-String\\); Write-Host \\($r.Substring\\(0, [Math]::Min\\($r.Length, 2000\\)\\)\\))",
+      "Bash(cat > *)",
+      "PowerShell(head -20)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\HP\\Desktop\\projets\\ediligence\\eda-mobile",
+      "\\mnt\\c\\Users\\HP\\Desktop\\projets\\ediligence\\eda-mobile\\app\\diligence",
+      "C:\\Users\\HP\\Desktop\\projets\\ediligence\\eda-mobile\\app\\diligence",
+      "C:\\Users\\HP\\Desktop\\projets\\ediligence\\eda-mobile\\app\\tache"
     ]
   }
 }

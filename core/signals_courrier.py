@@ -2,9 +2,10 @@ from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 from .models import (
-    Courrier, CourrierAccess, CourrierImputation, 
+    Courrier, CourrierAccess, CourrierImputation,
     CourrierNotification, CourrierStatut, Diligence
 )
+from .notifications import send_push_to_user
 
 
 def creer_notification(utilisateur, courrier, type_notification, titre, message, priorite='normale', cree_par=None, metadata=None):
@@ -74,13 +75,20 @@ def notifier_imputation_courrier(sender, instance, created, **kwargs):
     if created:
         type_courrier_label = 'confidentiel' if instance.courrier.type_courrier == 'confidentiel' else 'ordinaire'
         access_label = 'en édition' if instance.access_type == 'edit' else 'en lecture'
-        
+        granted_by_name = instance.granted_by.get_full_name() or instance.granted_by.username
+
+        titre = f'Courrier {type_courrier_label} imputé'
+        message = (
+            f'Le courrier {instance.courrier.reference} vous a été imputé '
+            f'{access_label} par {granted_by_name}.'
+        )
+
         creer_notification(
             utilisateur=instance.user,
             courrier=instance.courrier,
             type_notification='courrier_impute',
-            titre=f'Courrier {type_courrier_label} imputé',
-            message=f'Le courrier {instance.courrier.reference} vous a été imputé {access_label} par {instance.granted_by.get_full_name() or instance.granted_by.username}.',
+            titre=titre,
+            message=message,
             priorite='haute' if instance.courrier.type_courrier == 'confidentiel' else 'normale',
             cree_par=instance.granted_by,
             metadata={
@@ -88,6 +96,20 @@ def notifier_imputation_courrier(sender, instance, created, **kwargs):
                 'reference': instance.courrier.reference,
                 'access_type': instance.access_type,
                 'imputation_id': instance.id
+            }
+        )
+
+        # ── Push notification mobile ──────────────────────────────────────────
+        send_push_to_user(
+            user=instance.user,
+            title=titre,
+            body=message,
+            data={
+                'type': 'courrier_impute',
+                'courrier_id': str(instance.courrier.id),
+                'reference': instance.courrier.reference,
+                'type_courrier': instance.courrier.type_courrier,
+                'sens': instance.courrier.sens,
             }
         )
 
@@ -184,28 +206,29 @@ def notifier_changement_statut(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Diligence)
 def notifier_creation_diligence(sender, instance, created, **kwargs):
     """Notifier lors de la création d'une diligence liée à un courrier"""
-    if created and instance.courrier:
-        # Notifier le responsable de la diligence
+    if created:
+        ref = getattr(instance, 'reference_courrier', None) or getattr(instance, 'objet', None) or '—'
+        users_to_notify = set()
+
+        # Notifier le responsable
         if instance.responsable:
-            creer_notification(
-                utilisateur=instance.responsable,
-                courrier=instance.courrier,
-                type_notification='diligence_creee',
-                titre='Nouvelle diligence créée',
-                message=f'Une diligence a été créée pour le courrier {instance.courrier.reference}. Vous en êtes le responsable.',
-                priorite='haute',
-                cree_par=instance.created_by,
-                metadata={
-                    'courrier_id': instance.courrier.id,
-                    'reference': instance.courrier.reference,
-                    'diligence_id': instance.id,
-                    'diligence_reference': instance.reference_courrier
-                }
-            )
-        
+            users_to_notify.add(instance.responsable)
+            if instance.courrier:
+                creer_notification(
+                    utilisateur=instance.responsable,
+                    courrier=instance.courrier,
+                    type_notification='diligence_creee',
+                    titre='Nouvelle diligence créée',
+                    message=f'Une diligence a été créée pour le courrier {instance.courrier.reference}. Vous en êtes le responsable.',
+                    priorite='haute',
+                    cree_par=getattr(instance, 'created_by', None),
+                    metadata={'courrier_id': instance.courrier.id, 'diligence_id': instance.id}
+                )
+
         # Notifier les agents assignés
         for agent in instance.agents.all():
-            if agent != instance.responsable:  # Éviter de notifier deux fois le responsable
+            users_to_notify.add(agent)
+            if instance.courrier and agent != instance.responsable:
                 creer_notification(
                     utilisateur=agent,
                     courrier=instance.courrier,
@@ -213,14 +236,21 @@ def notifier_creation_diligence(sender, instance, created, **kwargs):
                     titre='Assigné à une nouvelle diligence',
                     message=f'Vous avez été assigné à une diligence pour le courrier {instance.courrier.reference}.',
                     priorite='normale',
-                    cree_par=instance.created_by,
-                    metadata={
-                        'courrier_id': instance.courrier.id,
-                        'reference': instance.courrier.reference,
-                        'diligence_id': instance.id,
-                        'diligence_reference': instance.reference_courrier
-                    }
+                    cree_par=getattr(instance, 'created_by', None),
+                    metadata={'courrier_id': instance.courrier.id, 'diligence_id': instance.id}
                 )
+
+        # Push mobile pour tous les concernés
+        for user in users_to_notify:
+            try:
+                send_push_to_user(
+                    user=user,
+                    title='Nouvelle diligence assignée 📄',
+                    body=f'La diligence « {ref} » vous a été assignée.',
+                    data={'type': 'nouvelle_diligence', 'diligence_id': str(instance.id)},
+                )
+            except Exception:
+                pass
 
 
 def notifier_rappel_traitement(courrier, utilisateur, message_rappel):

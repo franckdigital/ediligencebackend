@@ -386,6 +386,61 @@ def send_bulk_geofence_notifications(alerts):
     return success_count
 
 
+def send_push_to_user(user, title: str, body: str, data: dict = None):
+    """
+    Envoie une notification push à TOUS les appareils actifs d'un utilisateur.
+    Supporte Expo Push (token commençant par ExponentPushToken),
+    FCM (Android), APNS (iOS).
+    Silencieux en cas d'erreur — ne pas bloquer le signal/vue appelant.
+    """
+    try:
+        tokens = PushNotificationToken.objects.filter(user=user, is_active=True)
+        if not tokens.exists():
+            return
+
+        payload_data = data or {}
+
+        for token_obj in tokens:
+            tok = token_obj.token
+
+            # ── Expo Push Notification Service ──────────────────────────────
+            if tok.startswith('ExponentPushToken') or tok.startswith('ExpoPushToken'):
+                try:
+                    response = requests.post(
+                        'https://exp.host/--/api/v2/push/send',
+                        headers={
+                            'Accept': 'application/json',
+                            'Accept-Encoding': 'gzip, deflate',
+                            'Content-Type': 'application/json',
+                        },
+                        json={
+                            'to': tok,
+                            'title': title,
+                            'body': body,
+                            'data': payload_data,
+                            'sound': 'default',
+                            'priority': 'high',
+                            'channelId': 'ediligence',
+                        },
+                        timeout=8,
+                    )
+                    if response.status_code != 200:
+                        print(f"[Push] Expo error {response.status_code}: {response.text[:200]}")
+                except Exception as e:
+                    print(f"[Push] Expo exception: {e}")
+
+            # ── FCM (Android natif) ──────────────────────────────────────────
+            elif token_obj.platform == 'android':
+                send_fcm_notification(tok, title, body, payload_data)
+
+            # ── APNS (iOS natif) ─────────────────────────────────────────────
+            elif token_obj.platform == 'ios':
+                send_apns_notification(tok, title, body, payload_data)
+
+    except Exception as e:
+        print(f"[Push] send_push_to_user error: {e}")
+
+
 def create_geofence_notification_types():
     """Créer les types de notifications pour le géofencing (à exécuter lors de la migration)"""
     from .models import Notification

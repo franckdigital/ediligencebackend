@@ -727,7 +727,7 @@ class DiligenceViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Profil utilisateur non trouvé'}, status=status.HTTP_403_FORBIDDEN)
         
         role = profile.role
-        allowed_roles = ['ADMIN', 'DIRECTEUR', 'SUPERIEUR', 'SECRETAIRE']
+        allowed_roles = ['ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR', 'SECRETAIRE']
         
         if role not in allowed_roles:
             return Response({
@@ -827,54 +827,82 @@ class CourrierViewSet(viewsets.ModelViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
+        from django.db.models import Q
         user = self.request.user
+        profile = getattr(user, 'profile', None)
+        role = getattr(profile, 'role', None) if profile else None
+
         queryset = Courrier.objects.select_related(
             'service',
-            'service__direction'
+            'service__direction',
+            'service__sous_direction',
+            'service__sous_direction__direction',
         ).all()
 
-        # Site isolation
+        # ── Site isolation (admin reads header, others use own site) ─────────
         site_id = get_site_id_for_request(self.request)
         if site_id:
-            # Filter courriers by imputations belonging to users from this site
-            site_user_ids = User.objects.filter(profile__site_id=site_id).values_list('id', flat=True)
+            site_user_ids = User.objects.filter(
+                profile__site_id=site_id
+            ).values_list('id', flat=True)
             courrier_ids_via_imputations = CourrierImputation.objects.filter(
                 user_id__in=site_user_ids
             ).values_list('courrier_id', flat=True)
             queryset = queryset.filter(id__in=courrier_ids_via_imputations)
 
-        # Filtrage selon le type de courrier et les permissions
-        if hasattr(user, 'profile'):
-            # Les ADMIN et SECRETAIRE peuvent voir tous les courriers
-            if user.profile.role in ['ADMIN', 'SECRETAIRE']:
-                return queryset.order_by('-created_at')
-            
-            # Pour tous les autres rôles (DIRECTEUR, SUPERIEUR, CHEF_SERVICE, AGENT)
-            # Récupérer tous les courriers avec imputation pour cet utilisateur
+        # ── Role-based visibility ─────────────────────────────────────────────
+        if role == 'ADMIN':
+            pass  # Admin sees everything in the selected site
+
+        elif role == 'SECRETAIRE':
+            # Secretary sees only courriers related to their direction/entity.
+            # Priority: profile.direction → profile.service direction → site-only
+            direction_id = None
+            if profile and profile.direction_id:
+                direction_id = profile.direction_id
+            elif profile and profile.service_id:
+                svc = profile.service
+                if getattr(svc, 'sous_direction_id', None) and svc.sous_direction:
+                    direction_id = svc.sous_direction.direction_id
+                elif getattr(svc, 'direction_id', None):
+                    direction_id = svc.direction_id
+
+            if direction_id:
+                queryset = queryset.filter(
+                    Q(service__direction_id=direction_id) |
+                    Q(service__sous_direction__direction_id=direction_id) |
+                    Q(service__isnull=True)  # Courriers sans service rattaché
+                ).distinct()
+
+        elif profile:
+            # Other roles: only courriers explicitly imputed or access-granted
             imputation_ids = CourrierImputation.objects.filter(
                 user=user
             ).values_list('courrier_id', flat=True)
-            
-            # Pour les courriers confidentiels, vérifier aussi les permissions d'accès explicites
+
             accessible_confidential_ids = CourrierAccess.objects.filter(
                 user=user
             ).values_list('courrier_id', flat=True)
-            
-            # Combiner les IDs de tous les courriers accessibles (ordinaires et confidentiels)
-            all_accessible_ids = list(set(list(accessible_confidential_ids) + list(imputation_ids)))
-            
-            # Filtrer : 
-            # - Seulement les courriers qui ont été imputés à l'utilisateur (ordinaires ou confidentiels)
-            # - OU les courriers confidentiels avec accès explicite (CourrierAccess)
-            # Si aucun courrier n'est accessible, retourner un queryset vide
+
+            all_accessible_ids = list(
+                set(list(accessible_confidential_ids) + list(imputation_ids))
+            )
             if all_accessible_ids:
                 queryset = queryset.filter(id__in=all_accessible_ids)
             else:
-                queryset = queryset.none()  # Aucun courrier accessible
+                queryset = queryset.none()
         else:
-            # Si pas de profil, seulement les courriers ordinaires
             queryset = queryset.filter(type_courrier='ordinaire')
-            
+
+        # ── Query-param filters (type_courrier & sens) ────────────────────────
+        # These allow the mobile/web frontend to filter the list server-side.
+        type_courrier = self.request.query_params.get('type_courrier')
+        sens = self.request.query_params.get('sens')
+        if type_courrier in ('ordinaire', 'confidentiel'):
+            queryset = queryset.filter(type_courrier=type_courrier)
+        if sens in ('arrivee', 'depart'):
+            queryset = queryset.filter(sens=sens)
+
         return queryset.order_by('-created_at')
 
     def retrieve(self, request, *args, **kwargs):
@@ -2063,11 +2091,18 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
         if superieur:
             try:
                 from .models import DiligenceNotification
+                from .notifications import send_push_to_user
                 DiligenceNotification.objects.create(
                     user=superieur,
                     diligence=None,
                     type_notification='nouvelle_diligence',
                     message=f'{user.first_name} {user.last_name} a soumis une demande de congé {demande.get_type_conge_display()} du {demande.date_debut} au {demande.date_fin} nécessitant votre validation'
+                )
+                send_push_to_user(
+                    user=superieur,
+                    title='Demande de congé à valider 📋',
+                    body=f'{user.get_full_name() or user.username} a soumis une demande de congé du {demande.date_debut} au {demande.date_fin}.',
+                    data={'type': 'conge_soumis', 'conge_id': str(demande.id)},
                 )
             except Exception as e:
                 print(f"Erreur notification supérieur congé: {e}")
@@ -2123,6 +2158,7 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
         
         # Créer une notification pour le demandeur
         try:
+            from .notifications import send_push_to_user
             notification = Notification(
                 user=demande.demandeur,
                 type_notif='demande_approuvee',
@@ -2130,8 +2166,7 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
                 lien=f'/conges/{demande.id}'
             )
             notification.save()
-            
-            # Envoyer une notification à l'utilisateur concerné
+
             self.envoyer_notification(
                 utilisateur=demande.demandeur,
                 type_notification='conges_validation',
@@ -2139,29 +2174,35 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
                 message=f'Votre demande de congé du {demande.date_debut} au {demande.date_fin} a été approuvée par {request.user.get_full_name() or request.user.username}.',
                 lien=f'/conges/{demande.id}'
             )
+            send_push_to_user(
+                user=demande.demandeur,
+                title='Congé approuvé ✅',
+                body=f'Votre congé du {demande.date_debut} au {demande.date_fin} a été approuvé.',
+                data={'type': 'conge_decision', 'conge_id': str(demande.id), 'statut': 'approuve'},
+            )
         except Exception as e:
             print(f"Erreur notification congé approuvé: {e}")
-        
+
         return Response({'message': 'Demande approuvée'})
-    
+
     @action(detail=True, methods=['post'])
     def rejeter(self, request, pk=None):
         demande = self.get_object()
-        
+
         # Vérifier que l'utilisateur peut rejeter cette demande
         if demande.superieur_hierarchique != request.user:
             profile = getattr(request.user, 'profile', None)
             if not profile or profile.role not in ['ADMIN', 'SUPERIEUR', 'DIRECTEUR']:
                 return Response({'error': 'Non autorisé'}, status=403)
-        
+
         demande.statut = 'rejete'
         demande.date_validation = timezone.now()
         demande.commentaire_validation = request.data.get('commentaire', '')
         demande.save()
-        
+
         # Créer une notification pour le demandeur
         try:
-            # Notification via le système existant
+            from .notifications import send_push_to_user
             from .models import Notification
             notification = Notification(
                 user=demande.demandeur,
@@ -2170,8 +2211,7 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
                 lien=f'/conges/{demande.id}'
             )
             notification.save()
-            
-            # Notification via le système de diligence
+
             self.envoyer_notification(
                 utilisateur=demande.demandeur,
                 type_notification='conges_rejet',
@@ -2179,9 +2219,15 @@ class DemandeCongeViewSet(viewsets.ModelViewSet):
                 message=f'Votre demande de congé du {demande.date_debut} au {demande.date_fin} a été rejetée par {request.user.get_full_name() or request.user.username}. Motif: {request.data.get("commentaire", "Aucun motif fourni")}',
                 lien=f'/conges/{demande.id}'
             )
+            send_push_to_user(
+                user=demande.demandeur,
+                title='Congé rejeté ❌',
+                body=f'Votre congé du {demande.date_debut} au {demande.date_fin} a été rejeté. Motif : {request.data.get("commentaire", "—")}',
+                data={'type': 'conge_decision', 'conge_id': str(demande.id), 'statut': 'rejete'},
+            )
         except Exception as e:
             print(f"Erreur notification congé rejeté: {e}")
-        
+
         return Response({'message': 'Demande rejetée'})
     
     @action(detail=True, methods=['get'])
@@ -2306,11 +2352,18 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
         if superieur:
             try:
                 from .models import DiligenceNotification
+                from .notifications import send_push_to_user
                 DiligenceNotification.objects.create(
                     user=superieur,
                     diligence=None,
                     type_notification='nouvelle_diligence',
                     message=f'{user.first_name} {user.last_name} a soumis une demande d\'absence {demande.get_type_absence_display()} du {demande.date_debut} au {demande.date_fin} nécessitant votre validation'
+                )
+                send_push_to_user(
+                    user=superieur,
+                    title='Demande d\'absence à valider 📋',
+                    body=f'{user.get_full_name() or user.username} a soumis une demande d\'absence du {demande.date_debut.strftime("%d/%m/%Y")}.',
+                    data={'type': 'absence_soumise', 'absence_id': str(demande.id)},
                 )
             except Exception as e:
                 print(f"Erreur notification supérieur absence: {e}")
@@ -2366,7 +2419,7 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
         
         # Créer une notification pour le demandeur
         try:
-            # Notification via le système existant
+            from .notifications import send_push_to_user
             from .models import Notification
             notification = Notification(
                 user=demande.demandeur,
@@ -2376,45 +2429,43 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
                 lien=f'/absences/{demande.id}'
             )
             notification.save()
-            print(f"Notification standard créée avec succès pour {demande.demandeur.username}")
-            
-            # Notification via le système de diligence
             if hasattr(self, 'envoyer_notification'):
-                success = self.envoyer_notification(
+                self.envoyer_notification(
                     utilisateur=demande.demandeur,
                     type_notification='absences_validation',
                     titre='Demande d\'absence approuvée',
                     message=f'Votre demande d\'absence du {demande.date_debut.strftime("%d/%m/%Y %H:%M")} a été approuvée par {request.user.get_full_name() or request.user.username}.',
                     lien=f'/absences/{demande.id}'
                 )
-                print(f"Notification de diligence envoyée avec succès: {success}")
-            else:
-                print("Méthode envoyer_notification non trouvée dans la vue")
+            send_push_to_user(
+                user=demande.demandeur,
+                title='Absence approuvée ✅',
+                body=f'Votre demande d\'absence du {demande.date_debut.strftime("%d/%m/%Y")} a été approuvée.',
+                data={'type': 'absence_decision', 'absence_id': str(demande.id), 'statut': 'approuve'},
+            )
         except Exception as e:
             print(f"Erreur lors de la création des notifications: {str(e)}")
-            import traceback
-            traceback.print_exc()
-        
+
         return Response({'message': 'Demande approuvée'})
-    
+
     @action(detail=True, methods=['post'])
     def rejeter(self, request, pk=None):
         demande = self.get_object()
-        
+
         # Vérifier que l'utilisateur peut rejeter cette demande
         if demande.superieur_hierarchique != request.user:
             profile = getattr(request.user, 'profile', None)
             if not profile or profile.role not in ['ADMIN', 'SUPERIEUR', 'DIRECTEUR']:
                 return Response({'error': 'Non autorisé'}, status=403)
-        
+
         demande.statut = 'rejete'
         demande.date_validation = timezone.now()
         demande.commentaire_validation = request.data.get('commentaire', '')
         demande.save()
-        
+
         # Créer une notification pour le demandeur
         try:
-            # Notification via le système existant
+            from .notifications import send_push_to_user
             from .models import Notification
             notification = Notification(
                 user=demande.demandeur,
@@ -2423,8 +2474,7 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
                 lien=f'/absences/{demande.id}'
             )
             notification.save()
-            
-            # Notification via le système de diligence
+
             self.envoyer_notification(
                 utilisateur=demande.demandeur,
                 type_notification='absences_rejet',
@@ -2432,9 +2482,15 @@ class DemandeAbsenceViewSet(viewsets.ModelViewSet):
                 message=f'Votre demande d\'absence du {demande.date_debut.strftime("%d/%m/%Y %H:%M")} a été rejetée par {request.user.get_full_name() or request.user.username}. Motif: {request.data.get("commentaire", "Aucun motif fourni")}',
                 lien=f'/absences/{demande.id}'
             )
+            send_push_to_user(
+                user=demande.demandeur,
+                title='Absence rejetée ❌',
+                body=f'Votre demande d\'absence du {demande.date_debut.strftime("%d/%m/%Y")} a été rejetée. Motif : {request.data.get("commentaire", "—")}',
+                data={'type': 'absence_decision', 'absence_id': str(demande.id), 'statut': 'rejete'},
+            )
         except Exception as e:
             print(f"Erreur notification absence rejetée: {e}")
-        
+
         return Response({'message': 'Demande rejetée'})
     
     @action(detail=True, methods=['get'])
