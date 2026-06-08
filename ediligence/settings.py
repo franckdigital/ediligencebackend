@@ -1,5 +1,5 @@
 """
-Django settings for ediligence project.
+Django settings for ediligence project..
 """
 
 import pymysql
