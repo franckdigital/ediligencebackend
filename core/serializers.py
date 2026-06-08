@@ -1339,6 +1339,8 @@ class UserDiligenceCommentSerializer(serializers.ModelSerializer):
         model = UserDiligenceComment
         fields = ['id', 'diligence', 'user', 'user_name', 'diligence_reference', 'comment', 'created_at', 'updated_at']
         read_only_fields = ['created_at', 'updated_at']
+        # Désactiver le UniqueTogetherValidator : perform_create gère l'upsert via update_or_create
+        validators = []
 
 
 class UserDiligenceInstructionSerializer(serializers.ModelSerializer):
