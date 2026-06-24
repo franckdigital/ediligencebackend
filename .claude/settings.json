@@ -50,7 +50,10 @@
       "Bash(python manage.py makemigrations core --name=\"add_courrier_ia_ocr_fields\" --skip-checks)",
       "Bash(python manage.py check core --skip-checks)",
       "Bash(python -c ' *)",
-      "Bash(.\\\\.env\\\\Scripts\\\\pip install *)"
+      "Bash(.\\\\.env\\\\Scripts\\\\pip install *)",
+      "Bash(ssh root@72.60.88.93 \"cat /etc/nginx/sites-enabled/numerix.digital\")",
+      "Bash(node -e \"console.log\\('node ok'\\)\")",
+      "Bash(npx react-scripts *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\HP\\Desktop\\projets\\ediligence\\eda-mobile",
