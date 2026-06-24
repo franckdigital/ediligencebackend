@@ -8,6 +8,38 @@ from .models import (
 from .notifications import send_push_to_user
 
 
+# ─── Détection changement de fichier (pour le pipeline OCR/IA) ───────────────
+
+@receiver(pre_save, sender=Courrier)
+def detect_fichier_change(sender, instance, **kwargs):
+    """Mémorise si fichier_joint a changé pour le déclencher dans post_save."""
+    if instance.pk:
+        try:
+            old = Courrier.objects.get(pk=instance.pk)
+            instance._fichier_changed = (
+                bool(instance.fichier_joint) and
+                (not old.fichier_joint or old.fichier_joint.name != instance.fichier_joint.name)
+            )
+        except Courrier.DoesNotExist:
+            instance._fichier_changed = bool(instance.fichier_joint)
+    else:
+        instance._fichier_changed = bool(instance.fichier_joint)
+
+
+@receiver(post_save, sender=Courrier)
+def trigger_courrier_pipeline(sender, instance, created, **kwargs):
+    """Lance le pipeline OCR/miniature/IA après upload d'un fichier."""
+    if getattr(instance, '_fichier_changed', False) and instance.fichier_joint:
+        try:
+            from core.tasks_courrier import process_courrier_pipeline
+            process_courrier_pipeline.delay(instance.pk)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Impossible de déclencher le pipeline pour courrier {instance.pk}: {e}"
+            )
+
+
 def creer_notification(utilisateur, courrier, type_notification, titre, message, priorite='normale', cree_par=None, metadata=None):
     """Fonction utilitaire pour créer une notification"""
     CourrierNotification.objects.create(

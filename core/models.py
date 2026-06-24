@@ -288,8 +288,57 @@ class Courrier(models.Model):
     date_traitement = models.DateField(null=True, blank=True)
     fichier_joint = models.FileField(upload_to='courriers/', null=True, blank=True)
     rappel_traitement = models.BooleanField(default=False, help_text="Activer les rappels automatiques de traitement")
+    commentaires = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # ── Traitement automatique (OCR / IA / miniature) ─────────────────────────
+
+    TRAITEMENT_STATUT_CHOICES = [
+        ('en_attente', 'En attente'),
+        ('en_cours',   'En cours'),
+        ('termine',    'Terminé'),
+        ('erreur',     'Erreur'),
+    ]
+    URGENCE_CHOICES = [
+        ('faible',   'Faible'),
+        ('normal',   'Normal'),
+        ('haute',    'Haute'),
+        ('critique', 'Critique'),
+    ]
+
+    thumbnail          = models.ImageField(upload_to='courriers/thumbnails/', null=True, blank=True)
+    ocr_text           = models.TextField(blank=True, null=True)
+    resume_ia          = models.TextField(blank=True, null=True)
+    mots_cles          = models.JSONField(default=list, blank=True)
+    theme              = models.CharField(max_length=100, blank=True, null=True)
+    service_propose    = models.CharField(max_length=200, blank=True, null=True)
+    niveau_urgence     = models.CharField(max_length=20, choices=URGENCE_CHOICES, default='normal', blank=True, null=True)
+    traitement_statut  = models.CharField(max_length=20, choices=TRAITEMENT_STATUT_CHOICES, default='en_attente', blank=True, null=True)
+
+    @staticmethod
+    def generer_reference(sens, date_reception, org_code='ORG'):
+        """
+        Génère une référence unique : {ORG}-CA{SEQ}-DD-MM-YYYY (arrivée)
+                                   ou {ORG}-CD{SEQ}-DD-MM-YYYY (départ)
+        La séquence est journalière et repart à 001 chaque jour.
+        """
+        from django.conf import settings
+        code = getattr(settings, 'COURRIER_ORG_CODE', org_code)
+        prefix = 'CA' if sens == 'arrivee' else 'CD'
+        date_str = date_reception.strftime('%d-%m-%Y') if hasattr(date_reception, 'strftime') else str(date_reception)
+        count = Courrier.objects.filter(
+            date_reception=date_reception,
+            sens=sens,
+        ).count() + 1
+        return f"{code}-{prefix}{str(count).zfill(3)}-{date_str}"
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            from django.conf import settings
+            org_code = getattr(settings, 'COURRIER_ORG_CODE', 'ORG')
+            self.reference = Courrier.generer_reference(self.sens, self.date_reception, org_code)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.reference} - {self.objet}"
@@ -351,6 +400,43 @@ class CourrierStatut(models.Model):
     
     def __str__(self):
         return f"{self.courrier.reference} - {self.statut} ({self.date_modification.strftime('%d/%m/%Y')})"
+
+class CourrierInstruction(models.Model):
+    """Bordereau d'imputation et d'instructions (reproduit le formulaire papier)"""
+    INSTRUCTION_CHOICES = [
+        ('urgent',            'Urgent'),
+        ('examen_reponse',    'Pour examen et projet de réponse'),
+        ('attribution',       'Pour attribution'),
+        ('traitement',        'Pour traitement'),
+        ('rediger_discours',  'Rédiger discours'),
+        ('classer_archiver',  'À classer/archiver'),
+        ('suivi',             'Pour suivi'),
+        ('note_sd_pip',       'Pour note au Sous-Directeur PIP'),
+        ('note_sd_dsp',       'Pour note au Sous-Directeur DSP'),
+        ('diffusion',         'Pour diffusion'),
+        ('information',       'Pour information'),
+        ('seance_travail',    'Pour en parler en séance de travail'),
+        ('participation',     'Pour participation'),
+        ('note_directrice',   'Pour note à la Directrice'),
+        ('autre',             'Autre'),
+    ]
+
+    courrier = models.ForeignKey(Courrier, on_delete=models.CASCADE, related_name='courrier_instructions')
+    instructions = models.JSONField(default=list, help_text='Liste des codes d\'instructions sélectionnées')
+    date_limite_reaction = models.DateField(null=True, blank=True)
+    commentaire = models.TextField(blank=True)
+    creee_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='instructions_creees')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Instruction Courrier'
+        verbose_name_plural = 'Instructions Courrier'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Instructions {self.courrier.reference} ({self.created_at.strftime('%d/%m/%Y')})"
+
 
 class CourrierRappel(models.Model):
     """Modèle pour les rappels de traitement des courriers"""

@@ -29,14 +29,14 @@ from rest_framework.exceptions import PermissionDenied
 from .pdf_utils import generate_conge_pdf, generate_absence_pdf, create_pdf_response
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
-from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence, OccurrenceSpeciale, Site, SitePalier
+from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence, OccurrenceSpeciale, Site, SitePalier, CourrierInstruction
 from .serializers import (
     CourrierSerializer, ServiceSerializer, DirectionSerializer, SousDirectionSerializer,
     DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
     UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer, OccurrenceSpecialeSerializer,
     ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
     BureauSerializer, CourrierImputationSerializer, PresenceSerializer, RolePermissionSerializer,
-    SiteSerializer, SitePalierSerializer
+    SiteSerializer, SitePalierSerializer, CourrierInstructionSerializer
 )
 from .permissions import IsProfileAdmin
 from django.contrib.auth.models import User
@@ -1257,6 +1257,20 @@ class CourrierViewSet(viewsets.ModelViewSet):
         instance = serializer.save()
         instance.updated_at = timezone.now()
         instance.save()
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated], url_path='retraiter')
+    def retraiter(self, request, pk=None):
+        """Relance le pipeline OCR/miniature/IA sur un courrier existant."""
+        courrier = self.get_object()
+        if not courrier.fichier_joint:
+            return Response({'error': 'Aucun fichier joint à traiter'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from core.tasks_courrier import process_courrier_pipeline
+            Courrier.objects.filter(pk=courrier.pk).update(traitement_statut='en_attente')
+            process_courrier_pipeline.delay(courrier.pk)
+            return Response({'message': 'Pipeline de traitement lancé', 'courrier_id': courrier.pk})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
     def services(self, request, pk=None):
@@ -2654,9 +2668,36 @@ class CourrierImputationViewSet(viewsets.ModelViewSet):
         # Vérifier les permissions
         if not (hasattr(user, 'profile') and user.profile.role in ['ADMIN', 'DIRECTEUR']):
             return Response(
-                {'error': 'Seuls les administrateurs et directeurs peuvent supprimer des imputations'}, 
+                {'error': 'Seuls les administrateurs et directeurs peuvent supprimer des imputations'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         return super().destroy(request, *args, **kwargs)
+
+
+class CourrierInstructionViewSet(viewsets.ModelViewSet):
+    """Bordereau d'instructions pour un courrier (formulaire papier numérisé)"""
+    serializer_class = CourrierInstructionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get_queryset(self):
+        qs = CourrierInstruction.objects.select_related('courrier', 'creee_par')
+        courrier_id = self.request.query_params.get('courrier')
+        if courrier_id:
+            qs = qs.filter(courrier_id=courrier_id)
+        return qs
+
+    @action(detail=False, methods=['get'], url_path='preview_reference')
+    def preview_reference(self, request):
+        """Pré-visualise la référence qui sera générée sans créer le courrier."""
+        from datetime import date
+        sens = request.query_params.get('sens', 'arrivee')
+        date_str = request.query_params.get('date', str(date.today()))
+        try:
+            d = date.fromisoformat(date_str)
+        except ValueError:
+            d = date.today()
+        ref = Courrier.generer_reference(sens, d)
+        return Response({'reference': ref})
 

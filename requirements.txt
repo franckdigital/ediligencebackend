@@ -12,6 +12,11 @@ djangorestframework-simplejwt
 django-cors-headers
 # PDF Generation
 reportlab>=3.6.0
+# Traitement de fichiers (OCR / miniatures)
+Pillow>=10.0.0
+pdf2image>=1.17.0
+pytesseract>=0.3.10
+pdfplumber>=0.10.0
 # Optionnel pour l'admin amélioré
 # django-admin-interface
 # Pour les tests

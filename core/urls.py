@@ -9,11 +9,16 @@ from .views import (
     UserDiligenceCommentViewSet, UserDiligenceInstructionViewSet,
     DemandeCongeViewSet, DemandeAbsenceViewSet, UpdatePresenceStatusView, DeleteUserView,
     CustomTokenObtainPairView, MaPresenceDuJourView, MesPresencesView, SimplePresenceView, AgentRegistrationView,
-    DiligenceDownloadFichierView, OccurrenceSpecialeViewSet, SiteViewSet, SitePalierViewSet
+    DiligenceDownloadFichierView, OccurrenceSpecialeViewSet, SiteViewSet, SitePalierViewSet,
+    CourrierInstructionViewSet
 )
 from .views_courrier_access import CourrierAccessViewSet
 from .views_courrier_stats import CourrierStatsViewSet
 from .views_courrier_notifications import CourrierNotificationViewSet
+from .views_scanner import (
+    ScannerDiscoverView, ScannerScanView,
+    ScanPreClassifyView, ScanBatchImportView, ScanWatchStatusView,
+)
 from .views_ import UserManagementViewSet, NotificationViewSet, UserRegistrationView
 from .task_views import ProjetViewSet, TacheViewSet, CommentaireViewSet, FichierViewSet, ActiviteViewSet, DomaineViewSet, ScorePerformanceViewSet
 from .diligence_views import DiligenceDocumentViewSet, DiligenceNotificationViewSet, EnhancedDiligenceViewSet
@@ -45,6 +50,7 @@ router.register(r'courrier-access', CourrierAccessViewSet)
 router.register(r'courrier-imputation', CourrierImputationViewSet, basename='courrier-imputation')
 router.register(r'courrier-stats', CourrierStatsViewSet, basename='courrier-stats')
 router.register(r'courrier-notifications', CourrierNotificationViewSet, basename='courrier-notifications')
+router.register(r'courrier-instructions', CourrierInstructionViewSet, basename='courrier-instructions')
 router.register(r'diligences', DiligenceViewSet)
 router.register(r'imputation-files', ImputationFileViewSet)
 router.register(r'imputation-access', ImputationAccessViewSet)
@@ -142,7 +148,12 @@ urlpatterns = [
     path('taches/<int:pk>/historique/',
          __import__('core.task_views').task_views.tache_historique,
          name='tache_historique'),
-    
+    # ── Scanner ──────────────────────────────────────────────────────────────
+    path('scan/discover/',      ScannerDiscoverView.as_view(),  name='scan-discover'),
+    path('scan/scan/',          ScannerScanView.as_view(),      name='scan-scan'),
+    path('scan/pre-classify/',  ScanPreClassifyView.as_view(),  name='scan-pre-classify'),
+    path('scan/batch-import/',  ScanBatchImportView.as_view(),  name='scan-batch-import'),
+    path('scan/watch-status/',  ScanWatchStatusView.as_view(),  name='scan-watch-status'),
 ]
 
 

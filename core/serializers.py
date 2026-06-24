@@ -16,7 +16,7 @@ from core.models import (
     Fichier, Commentaire, Tache, Activite, Domaine, Projet,
     GeofenceAlert, GeofenceSettings, AgentLocation, PushNotificationToken,
     OccurrenceSpeciale, RendezVous, RendezVousDocument, Reunion, ReunionPresence,
-    Site, SitePalier
+    Site, SitePalier, CourrierInstruction
 )
 
 class ImputationFileSerializer(serializers.ModelSerializer):
@@ -614,6 +614,25 @@ class ServiceSerializer(serializers.ModelSerializer):
         fields = ['id', 'nom', 'description', 'sous_direction', 'sous_direction_nom', 'sous_direction_obj', 'direction', 'direction_nom']
 
 
+class CourrierInstructionSerializer(serializers.ModelSerializer):
+    creee_par_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourrierInstruction
+        fields = ['id', 'courrier', 'instructions', 'date_limite_reaction', 'commentaire',
+                  'creee_par', 'creee_par_nom', 'created_at', 'updated_at']
+        read_only_fields = ['creee_par', 'created_at', 'updated_at']
+
+    def get_creee_par_nom(self, obj):
+        if obj.creee_par:
+            return f"{obj.creee_par.first_name} {obj.creee_par.last_name}".strip() or obj.creee_par.username
+        return None
+
+    def create(self, validated_data):
+        validated_data['creee_par'] = self.context['request'].user
+        return super().create(validated_data)
+
+
 class CourrierSerializer(serializers.ModelSerializer):
     service_details = serializers.SerializerMethodField()
     fichier_joint_url = serializers.SerializerMethodField()
@@ -621,15 +640,19 @@ class CourrierSerializer(serializers.ModelSerializer):
     access_granted = serializers.SerializerMethodField()
     diligence = serializers.SerializerMethodField()
     diligence_id = serializers.SerializerMethodField()
+    derniere_instruction = serializers.SerializerMethodField()
 
     class Meta:
         model = Courrier
-        fields = ['id', 'reference', 'expediteur', 'destinataire', 'objet', 'date_reception', 
+        fields = ['id', 'reference', 'expediteur', 'destinataire', 'objet', 'date_reception',
                  'service', 'service_details', 'categorie', 'type_courrier', 'sens', 'statut', 'date_traitement',
-                 'fichier_joint', 'fichier_joint_url', 'rappel_traitement', 'imputation_access', 'access_granted', 
-                 'diligence', 'diligence_id', 'created_at', 'updated_at']
+                 'fichier_joint', 'fichier_joint_url', 'rappel_traitement', 'commentaires', 'imputation_access',
+                 'access_granted', 'diligence', 'diligence_id', 'derniere_instruction',
+                 'thumbnail', 'ocr_text', 'resume_ia', 'mots_cles', 'theme', 'service_propose',
+                 'niveau_urgence', 'traitement_statut',
+                 'created_at', 'updated_at']
         extra_kwargs = {
-            'reference': {'required': True},
+            'reference': {'required': False},
             'expediteur': {'required': True},
             'destinataire': {'required': False},
             'objet': {'required': True},
@@ -708,6 +731,19 @@ class CourrierSerializer(serializers.ModelSerializer):
         from .models import Diligence
         diligence = Diligence.objects.filter(courrier=obj).first()
         return diligence.id if diligence else None
+
+    def get_derniere_instruction(self, obj):
+        from .models import CourrierInstruction
+        instr = CourrierInstruction.objects.filter(courrier=obj).order_by('-created_at').first()
+        if instr:
+            return {
+                'id': instr.id,
+                'instructions': instr.instructions,
+                'date_limite_reaction': instr.date_limite_reaction,
+                'commentaire': instr.commentaire,
+                'created_at': instr.created_at,
+            }
+        return None
 
     def create(self, validated_data):
         try:
