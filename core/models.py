@@ -23,18 +23,26 @@ class ImputationFile(models.Model):
 class Direction(models.Model):
     """Une Direction est une entité qui regroupe plusieurs sous-directions.
     Par exemple: Direction des Ressources Humaines, Direction Financière, etc."""
+    TYPE_CHOICES = [
+        ('cabinet', 'Cabinet'),
+        ('direction_generale', 'Direction Générale'),
+        ('direction', 'Direction'),
+    ]
     nom = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    type_direction = models.CharField(max_length=30, choices=TYPE_CHOICES, default='direction', verbose_name='Type')
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         verbose_name = 'Direction'
         verbose_name_plural = 'Directions'
-        ordering = ['nom']
+        ordering = ['type_direction', 'nom']
 
     def __str__(self):
-        return self.nom
+        labels = {'cabinet': 'Cabinet', 'direction_generale': 'Dir. Gén.', 'direction': 'Direction'}
+        prefix = labels.get(self.type_direction, '')
+        return f"[{prefix}] {self.nom}" if prefix and self.type_direction != 'direction' else self.nom
     
     @property
     def nombre_sous_directions(self):
@@ -164,12 +172,27 @@ class UserProfile(models.Model):
     matricule = models.CharField(max_length=64, blank=True, null=True)
     telephone = models.CharField(max_length=32, unique=True, blank=True, null=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='AGENT')
+    cabinet = models.ForeignKey(
+        'Direction',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cabinet_users',
+        limit_choices_to={'type_direction': 'cabinet'},
+    )
+    direction_generale = models.ForeignKey(
+        'Direction',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='direction_generale_users',
+        limit_choices_to={'type_direction': 'direction_generale'},
+    )
     direction = models.ForeignKey(
         'Direction',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='profile_users',
+        limit_choices_to={'type_direction': 'direction'},
     )
     sous_direction = models.ForeignKey(
         'SousDirection',

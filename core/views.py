@@ -492,10 +492,11 @@ class DirectionViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
 
     def get_queryset(self):
-        queryset = Direction.objects.prefetch_related('sous_directions__services').all().order_by('-created_at')
-        for direction in queryset:
-            print(f'Direction {direction.nom} sous-directions:', [sd.nom for sd in direction.sous_directions.all()])
-        return queryset
+        queryset = Direction.objects.prefetch_related('sous_directions__services').all()
+        type_direction = self.request.query_params.get('type_direction', None)
+        if type_direction:
+            queryset = queryset.filter(type_direction=type_direction)
+        return queryset.order_by('type_direction', 'nom')
 
     def perform_create(self, serializer):
         serializer.save()

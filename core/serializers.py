@@ -162,8 +162,20 @@ class UserSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False
     )
+    cabinet = serializers.PrimaryKeyRelatedField(
+        queryset=Direction.objects.filter(type_direction='cabinet'),
+        source='profile.cabinet',
+        allow_null=True,
+        required=False
+    )
+    direction_generale = serializers.PrimaryKeyRelatedField(
+        queryset=Direction.objects.filter(type_direction='direction_generale'),
+        source='profile.direction_generale',
+        allow_null=True,
+        required=False
+    )
     direction = serializers.PrimaryKeyRelatedField(
-        queryset=Direction.objects.all(),
+        queryset=Direction.objects.filter(type_direction='direction'),
         source='profile.direction',
         allow_null=True,
         required=False
@@ -196,7 +208,8 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'is_active',
-            'role', 'role_display', 'service', 'service_obj', 'direction', 'sous_direction', 'site',
+            'role', 'role_display', 'service', 'service_obj',
+            'cabinet', 'direction_generale', 'direction', 'sous_direction', 'site',
             'matricule', 'empreinte_hash', 'telephone', 'password', 'profile'
         ]
         read_only_fields = ['id', 'role_display', 'empreinte_hash', 'service_obj']
@@ -231,7 +244,9 @@ class UserSerializer(serializers.ModelSerializer):
                     'matricule': profile.matricule,
                     'telephone': profile.telephone,
                     'service': service_data,
-                    'direction': {'id': profile.direction.id, 'nom': profile.direction.nom} if profile.direction else None,
+                    'cabinet': {'id': profile.cabinet.id, 'nom': profile.cabinet.nom, 'type_direction': profile.cabinet.type_direction} if profile.cabinet else None,
+                    'direction_generale': {'id': profile.direction_generale.id, 'nom': profile.direction_generale.nom, 'type_direction': profile.direction_generale.type_direction} if profile.direction_generale else None,
+                    'direction': {'id': profile.direction.id, 'nom': profile.direction.nom, 'type_direction': profile.direction.type_direction} if profile.direction else None,
                     'sous_direction': {'id': profile.sous_direction.id, 'nom': profile.sous_direction.nom} if profile.sous_direction else None,
                     'site': site_data,
                 }
@@ -249,13 +264,15 @@ class UserSerializer(serializers.ModelSerializer):
                 return profile_data.pop(key)
             return validated_data.pop(key, None)
 
-        matricule      = _pop('matricule')
-        telephone      = _pop('telephone')
-        service        = _pop('service')
-        direction      = _pop('direction')
-        sous_direction = _pop('sous_direction')
-        site           = _pop('site')
-        role           = _pop('role')
+        matricule          = _pop('matricule')
+        telephone          = _pop('telephone')
+        service            = _pop('service')
+        cabinet            = _pop('cabinet')
+        direction_generale = _pop('direction_generale')
+        direction          = _pop('direction')
+        sous_direction     = _pop('sous_direction')
+        site               = _pop('site')
+        role               = _pop('role')
         # Mot de passe
         password = validated_data.pop('password', None)
         # Update user fields
@@ -288,6 +305,16 @@ class UserSerializer(serializers.ModelSerializer):
                         logger.warning(f'[UserSerializer] Service id {service} introuvable')
                 else:
                     profile.service = service
+            # Cabinet
+            if cabinet is not None:
+                profile.cabinet = cabinet
+            elif hasattr(self, 'initial_data') and 'cabinet' in self.initial_data:
+                profile.cabinet = None
+            # Direction Générale
+            if direction_generale is not None:
+                profile.direction_generale = direction_generale
+            elif hasattr(self, 'initial_data') and 'direction_generale' in self.initial_data:
+                profile.direction_generale = None
             # Direction
             if direction is not None:
                 profile.direction = direction
@@ -327,13 +354,15 @@ class UserSerializer(serializers.ModelSerializer):
             profile_data = validated_data.pop('profile')
         
         # Extraire les champs du profil depuis les données principales
-        role           = validated_data.pop('role',           profile_data.get('role', 'AGENT'))
-        service        = validated_data.pop('service',        profile_data.get('service'))
-        direction      = validated_data.pop('direction',      profile_data.get('direction'))
-        sous_direction = validated_data.pop('sous_direction', profile_data.get('sous_direction'))
-        site           = validated_data.pop('site',           profile_data.get('site'))
-        matricule      = validated_data.pop('matricule',      profile_data.get('matricule'))
-        telephone      = validated_data.pop('telephone',      profile_data.get('telephone'))
+        role               = validated_data.pop('role',               profile_data.get('role', 'AGENT'))
+        service            = validated_data.pop('service',            profile_data.get('service'))
+        cabinet            = validated_data.pop('cabinet',            profile_data.get('cabinet'))
+        direction_generale = validated_data.pop('direction_generale', profile_data.get('direction_generale'))
+        direction          = validated_data.pop('direction',          profile_data.get('direction'))
+        sous_direction     = validated_data.pop('sous_direction',     profile_data.get('sous_direction'))
+        site               = validated_data.pop('site',               profile_data.get('site'))
+        matricule          = validated_data.pop('matricule',          profile_data.get('matricule'))
+        telephone          = validated_data.pop('telephone',          profile_data.get('telephone'))
         # Chaîne vide → null pour respecter unique=True
         if isinstance(telephone, str):
             telephone = telephone.strip() or None
@@ -352,6 +381,8 @@ class UserSerializer(serializers.ModelSerializer):
             defaults={
                 'role': role,
                 'service': service,
+                'cabinet': cabinet,
+                'direction_generale': direction_generale,
                 'direction': direction,
                 'sous_direction': sous_direction,
                 'site': site,
@@ -361,13 +392,15 @@ class UserSerializer(serializers.ModelSerializer):
         )
 
         if not created:
-            profile.role          = role          or profile.role
-            profile.service       = service       or profile.service
-            profile.direction     = direction     if direction is not None else profile.direction
-            profile.sous_direction = sous_direction if sous_direction is not None else profile.sous_direction
-            profile.site          = site          if site is not None else profile.site
-            profile.matricule     = matricule     or profile.matricule
-            profile.telephone     = telephone     or profile.telephone
+            profile.role               = role               or profile.role
+            profile.service            = service            or profile.service
+            profile.cabinet            = cabinet            if cabinet is not None else profile.cabinet
+            profile.direction_generale = direction_generale if direction_generale is not None else profile.direction_generale
+            profile.direction          = direction          if direction is not None else profile.direction
+            profile.sous_direction     = sous_direction     if sous_direction is not None else profile.sous_direction
+            profile.site               = site               if site is not None else profile.site
+            profile.matricule          = matricule          or profile.matricule
+            profile.telephone          = telephone          or profile.telephone
             profile.save()
         
         return user
@@ -546,7 +579,7 @@ class DirectionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Direction
-        fields = ['id', 'nom', 'description', 'nombre_services', 'services', 'created_at', 'updated_at']
+        fields = ['id', 'nom', 'description', 'type_direction', 'nombre_services', 'services', 'created_at', 'updated_at']
 
     def get_nombre_services(self, obj):
         # Utiliser la propriété du modèle qui gère le try/except
@@ -671,12 +704,15 @@ class CourrierSerializer(serializers.ModelSerializer):
     def get_service_details(self, obj):
         if obj.service:
             service = obj.service
+            sd = service.sous_direction
+            dir_obj = sd.direction if sd else service.direction
             return {
                 'id': service.id,
                 'nom': service.nom,
-                'description': service.description,
-                'direction': service.direction.id if service.direction else None,
-                'direction_nom': service.direction.nom if service.direction else None
+                'sous_direction': sd.id if sd else None,
+                'sous_direction_nom': sd.nom if sd else None,
+                'direction': dir_obj.id if dir_obj else None,
+                'direction_nom': dir_obj.nom if dir_obj else None,
             }
         return None
     
