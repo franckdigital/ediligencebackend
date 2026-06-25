@@ -58,7 +58,8 @@
       "Bash(ssh root@72.60.88.93 \"ls -la /var/www/numerix/home/static/js/ | grep main\")",
       "Bash(sort -t: -k3)",
       "Bash(uniq -d -f2)",
-      "Bash(grep -E \"^-.*\\\\.py$\")"
+      "Bash(grep -E \"^-.*\\\\.py$\")",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\('c:/Users/HP/Desktop/projets/ediligence/ediligencebackend/core/management/commands/seed_medi.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\HP\\Desktop\\projets\\ediligence\\eda-mobile",

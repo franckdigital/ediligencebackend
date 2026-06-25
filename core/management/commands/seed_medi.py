@@ -169,8 +169,8 @@ class Command(BaseCommand):
             if created:
                 c.fichier_joint.save(f"{ref}.pdf", dummy_file(f"{ref}.pdf", objet), save=True)
                 CourrierImputation.objects.get_or_create(
-                    courrier=c, user=self.medi,
-                    defaults={"access_type": "edit", "imputed_by": self.admin}
+                    courrier=c, user=self.medi, access_type="edit",
+                    defaults={"granted_by": self.admin}
                 )
             self.courriers.append(c)
 
