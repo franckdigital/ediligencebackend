@@ -96,6 +96,9 @@ class ImputationFileViewSet(viewsets.ModelViewSet):
         
         return queryset
     
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
     def create(self, request, *args, **kwargs):
         print(f"[DEBUG] ImputationFile create - User: {request.user}, Data: {request.data}")
         try:
