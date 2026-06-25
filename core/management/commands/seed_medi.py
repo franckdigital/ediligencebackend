@@ -177,7 +177,7 @@ class Command(BaseCommand):
         instructions = ["urgent", "examen_reponse", "attribution", "information", "classer_archiver"]
         for i, c in enumerate(self.courriers[:5]):
             CourrierInstruction.objects.get_or_create(
-                courrier=c, created_by=self.medi,
+                courrier=c, creee_par=self.medi,
                 defaults={"instruction": instructions[i],
                           "commentaire": f"Traitement requis — {c.objet[:60]}"}
             )
