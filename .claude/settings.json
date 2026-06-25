@@ -53,7 +53,12 @@
       "Bash(.\\\\.env\\\\Scripts\\\\pip install *)",
       "Bash(ssh root@72.60.88.93 \"cat /etc/nginx/sites-enabled/numerix.digital\")",
       "Bash(node -e \"console.log\\('node ok'\\)\")",
-      "Bash(npx react-scripts *)"
+      "Bash(npx react-scripts *)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\HP\\\\Desktop\\\\projets\\\\ediligence\\\\frontend\\\\build\\\\static\\\\js\\\\\" | Sort-Object LastWriteTime -Descending | Select-Object Name, LastWriteTime, @{N='Ko';E={[math]::Round\\($_.Length/1KB,1\\)}} | Select-Object -First 8)",
+      "Bash(ssh root@72.60.88.93 \"ls -la /var/www/numerix/home/static/js/ | grep main\")",
+      "Bash(sort -t: -k3)",
+      "Bash(uniq -d -f2)",
+      "Bash(grep -E \"^-.*\\\\.py$\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\HP\\Desktop\\projets\\ediligence\\eda-mobile",
