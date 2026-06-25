@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils import timezone
 from datetime import datetime, timedelta
 from .models import Diligence, DiligenceDocument, DiligenceNotification, Courrier
@@ -82,6 +83,7 @@ class EnhancedDiligenceViewSet(viewsets.ModelViewSet):
     queryset = Diligence.objects.all().order_by('-created_at')
     serializer_class = DiligenceSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     
     def get_queryset(self):
         user = self.request.user
