@@ -29,14 +29,14 @@ from rest_framework.exceptions import PermissionDenied
 from .pdf_utils import generate_conge_pdf, generate_absence_pdf, create_pdf_response
 from rest_framework.permissions import BasePermission
 from rest_framework.pagination import PageNumberPagination
-from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence, OccurrenceSpeciale, Site, SitePalier, CourrierInstruction
+from .models import Direction, SousDirection, Service, Diligence, Courrier, UserProfile, Bureau, Presence, Agent, RolePermission, ImputationAccess, CourrierAccess, CourrierImputation, ImputationFile, UserDiligenceComment, UserDiligenceInstruction, DemandeConge, DemandeAbsence, OccurrenceSpeciale, Site, SitePalier, CourrierInstruction, CourrierAnnexe
 from .serializers import (
     CourrierSerializer, ServiceSerializer, DirectionSerializer, SousDirectionSerializer,
     DiligenceSerializer, UserSerializer, UserRegistrationSerializer, ImputationAccessSerializer,
     UserDiligenceCommentSerializer, UserDiligenceInstructionSerializer, OccurrenceSpecialeSerializer,
     ImputationFileSerializer, DemandeCongeSerializer, DemandeAbsenceSerializer,
     BureauSerializer, CourrierImputationSerializer, PresenceSerializer, RolePermissionSerializer,
-    SiteSerializer, SitePalierSerializer, CourrierInstructionSerializer
+    SiteSerializer, SitePalierSerializer, CourrierInstructionSerializer, CourrierAnnexeSerializer
 )
 from .permissions import IsProfileAdmin
 from django.contrib.auth.models import User
@@ -2702,3 +2702,17 @@ class CourrierInstructionViewSet(viewsets.ModelViewSet):
         ref = Courrier.generer_reference(sens, d)
         return Response({'reference': ref})
 
+
+class CourrierAnnexeViewSet(viewsets.ModelViewSet):
+    """Annexes (fichiers joints supplémentaires) d'un courrier"""
+    serializer_class = CourrierAnnexeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def get_queryset(self):
+        qs = CourrierAnnexe.objects.select_related('courrier', 'uploaded_by')
+        courrier_id = self.request.query_params.get('courrier')
+        if courrier_id:
+            qs = qs.filter(courrier_id=courrier_id)
+        return qs

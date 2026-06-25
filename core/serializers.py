@@ -16,7 +16,7 @@ from core.models import (
     Fichier, Commentaire, Tache, Activite, Domaine, Projet,
     GeofenceAlert, GeofenceSettings, AgentLocation, PushNotificationToken,
     OccurrenceSpeciale, RendezVous, RendezVousDocument, Reunion, ReunionPresence,
-    Site, SitePalier, CourrierInstruction
+    Site, SitePalier, CourrierInstruction, CourrierAnnexe
 )
 
 class ImputationFileSerializer(serializers.ModelSerializer):
@@ -916,6 +916,25 @@ class CourrierAccessSerializer(serializers.ModelSerializer):
             'first_name': obj.granted_by.first_name,
             'last_name': obj.granted_by.last_name
         }
+
+class CourrierAnnexeSerializer(serializers.ModelSerializer):
+    fichier_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourrierAnnexe
+        fields = ['id', 'courrier', 'fichier', 'fichier_url', 'nom', 'uploaded_by', 'created_at']
+        read_only_fields = ['uploaded_by', 'created_at']
+
+    def get_fichier_url(self, obj):
+        request = self.context.get('request')
+        if obj.fichier and request:
+            return request.build_absolute_uri(obj.fichier.url)
+        return obj.fichier.url if obj.fichier else None
+
+    def create(self, validated_data):
+        validated_data['uploaded_by'] = self.context['request'].user
+        return super().create(validated_data)
+
 
 class CourrierImputationSerializer(serializers.ModelSerializer):
     user_details = serializers.SerializerMethodField()

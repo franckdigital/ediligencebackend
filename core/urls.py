@@ -10,7 +10,7 @@ from .views import (
     DemandeCongeViewSet, DemandeAbsenceViewSet, UpdatePresenceStatusView, DeleteUserView,
     CustomTokenObtainPairView, MaPresenceDuJourView, MesPresencesView, SimplePresenceView, AgentRegistrationView,
     DiligenceDownloadFichierView, OccurrenceSpecialeViewSet, SiteViewSet, SitePalierViewSet,
-    CourrierInstructionViewSet
+    CourrierInstructionViewSet, CourrierAnnexeViewSet
 )
 from .views_courrier_access import CourrierAccessViewSet
 from .views_courrier_stats import CourrierStatsViewSet
@@ -51,6 +51,7 @@ router.register(r'courrier-imputation', CourrierImputationViewSet, basename='cou
 router.register(r'courrier-stats', CourrierStatsViewSet, basename='courrier-stats')
 router.register(r'courrier-notifications', CourrierNotificationViewSet, basename='courrier-notifications')
 router.register(r'courrier-instructions', CourrierInstructionViewSet, basename='courrier-instructions')
+router.register(r'courrier-annexes', CourrierAnnexeViewSet, basename='courrier-annexes')
 router.register(r'diligences', DiligenceViewSet)
 router.register(r'imputation-files', ImputationFileViewSet)
 router.register(r'imputation-access', ImputationAccessViewSet)

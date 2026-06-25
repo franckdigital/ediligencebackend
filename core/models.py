@@ -401,6 +401,22 @@ class CourrierImputation(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.courrier.reference} ({self.access_type})"
 
+class CourrierAnnexe(models.Model):
+    """Fichiers annexes attachés à un courrier"""
+    courrier = models.ForeignKey(Courrier, on_delete=models.CASCADE, related_name='annexes')
+    fichier = models.FileField(upload_to='courriers/annexes/')
+    nom = models.CharField(max_length=255)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='courrier_annexes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Annexe Courrier'
+
+    def __str__(self):
+        return f"{self.nom} — {self.courrier.reference}"
+
+
 class CourrierStatut(models.Model):
     """Modèle pour suivre le statut et l'historique des courriers"""
     STATUT_CHOICES = [
