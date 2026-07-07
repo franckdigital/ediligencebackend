@@ -225,10 +225,12 @@ class NotificationViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = getattr(getattr(user, 'profile', None), 'role', None)
         qs = Notification.objects.all().order_by('-created_at')
-        # Admin (et superadmin) voient tout, sinon seulement notifications de l'utilisateur
         if role in ['ADMIN', 'superadmin']:
-            return qs
-        return qs.filter(user=user)
+            qs = qs.filter(user=user)  # Admin voit ses propres notifs seulement
+        else:
+            qs = qs.filter(user=user)
+        # Limiter à 100 notifications max pour éviter les réponses trop lourdes
+        return qs[:100]
 
     @action(detail=True, methods=['post'])
     def mark_as_read(self, request, pk=None):
