@@ -2719,3 +2719,37 @@ class CourrierAnnexeViewSet(viewsets.ModelViewSet):
         if courrier_id:
             qs = qs.filter(courrier_id=courrier_id)
         return qs
+
+
+class PresenceSummaryView(APIView):
+    """GET /api/presences/summary/ — Stats de présence agrégées du jour en une seule requête DB."""
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request):
+        today = date.today()
+        site_id = get_site_id_for_request(request)
+
+        qs = Presence.objects.filter(date_presence=today)
+        if site_id:
+            qs = qs.filter(agent__user__profile__site_id=site_id)
+        presents = qs.filter(statut__in=['présent', 'en mission']).count()
+
+        users_qs = User.objects.filter(is_active=True)
+        if site_id:
+            users_qs = users_qs.filter(profile__site_id=site_id)
+        total_agents = users_qs.count()
+
+        if site_id:
+            bureaux_count = Bureau.objects.filter(site_id=site_id).count()
+        else:
+            bureaux_count = Bureau.objects.count()
+
+        taux = round((presents / total_agents * 100) if total_agents > 0 else 0, 1)
+
+        return Response({
+            'presentsAujourdhui': presents,
+            'totalAgents': total_agents,
+            'bureauxActifs': bureaux_count,
+            'tauxPresence': taux,
+        })

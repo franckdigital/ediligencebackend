@@ -10,7 +10,7 @@ from .views import (
     DemandeCongeViewSet, DemandeAbsenceViewSet, UpdatePresenceStatusView, DeleteUserView,
     CustomTokenObtainPairView, MaPresenceDuJourView, MesPresencesView, SimplePresenceView, AgentRegistrationView,
     DiligenceDownloadFichierView, OccurrenceSpecialeViewSet, SiteViewSet, SitePalierViewSet,
-    CourrierInstructionViewSet, CourrierAnnexeViewSet
+    CourrierInstructionViewSet, CourrierAnnexeViewSet, PresenceSummaryView
 )
 from .views_courrier_access import CourrierAccessViewSet
 from .views_courrier_stats import CourrierStatsViewSet
@@ -157,6 +157,7 @@ urlpatterns = [
     path('scan/batch-import/',  ScanBatchImportView.as_view(),  name='scan-batch-import'),
     path('scan/watch-status/',  ScanWatchStatusView.as_view(),  name='scan-watch-status'),
     path('executive-kpi/',      ExecutiveKPIView.as_view(),      name='executive-kpi'),
+    path('presences/summary/',  PresenceSummaryView.as_view(),  name='presence-summary'),
 ]
 
 
