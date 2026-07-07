@@ -127,6 +127,7 @@ urlpatterns = [
     path('presence/simple/', SimplePresenceView.as_view(), name='simple-presence'),
     path('presence/<int:presence_id>/update-status/', UpdatePresenceStatusView.as_view(), name='update-presence-status'),
     path('stats/presence/', PresenceStatsAPIView.as_view(), name='presence-stats'),
+    path('presences/summary/',  PresenceSummaryView.as_view(),  name='presence-summary'),
     path('', include(router.urls)),
     path('ged/courriers-disponibles/', ged_courriers_disponibles, name='ged-courriers-disponibles'),
     path('ged/diligences-disponibles/', ged_diligences_disponibles, name='ged-diligences-disponibles'),
@@ -157,7 +158,6 @@ urlpatterns = [
     path('scan/batch-import/',  ScanBatchImportView.as_view(),  name='scan-batch-import'),
     path('scan/watch-status/',  ScanWatchStatusView.as_view(),  name='scan-watch-status'),
     path('executive-kpi/',      ExecutiveKPIView.as_view(),      name='executive-kpi'),
-    path('presences/summary/',  PresenceSummaryView.as_view(),  name='presence-summary'),
 ]
 
 
