@@ -1764,11 +1764,17 @@ class OccurrenceSpecialeViewSet(viewsets.ModelViewSet):
         return OccurrenceSpeciale.objects.filter(agent=user)
 
 
+class PresencePagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'per_page'
+    max_page_size = 200
+
 class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [JWTAuthentication]
+    pagination_class = PresencePagination
 
     def get_queryset(self):
         qs = Presence.objects.select_related(
