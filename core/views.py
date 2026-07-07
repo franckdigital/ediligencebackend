@@ -603,12 +603,18 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
 from .serializers import DirectionSerializer, ServiceSerializer, CourrierSerializer
 
+class DiligencePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'per_page'
+    max_page_size = 100
+
 class DiligenceViewSet(viewsets.ModelViewSet):
     queryset = Diligence.objects.all()
     serializer_class = DiligenceSerializer
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [JWTAuthentication]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
+    pagination_class = DiligencePagination
 
     def get_queryset(self):
         user = self.request.user
@@ -629,7 +635,6 @@ class DiligenceViewSet(viewsets.ModelViewSet):
             return Diligence.objects.none()
 
         role = profile.role
-        print(f"[DEBUG] DiligenceViewSet get_queryset - User: {user.username} (ID: {user.id}), Role: {role}")
 
         # Site isolation — filter base_qs to the active site
         site_id = get_site_id_for_request(self.request)
@@ -644,23 +649,16 @@ class DiligenceViewSet(viewsets.ModelViewSet):
         # Build queryset for diligences accessible by ImputationAccess
         from core.models import ImputationAccess
         imputation_access_qs = base_qs.filter(imputation_access__user=user)
-        print(f"[DEBUG] ImputationAccess diligences count: {imputation_access_qs.count()}")
 
         # Build queryset for diligences accessible by ImputationFile (agent imputation)
         from core.models import ImputationFile
         imputation_file_qs = base_qs.filter(imputation_files__agent=user)
-        print(f"[DEBUG] ImputationFile diligences count: {imputation_file_qs.count()}")
 
         # Filtrage par rôle
-        # 1. Diligences où l'utilisateur est dans les agents assignés
         assigned_qs = base_qs.filter(agents=user)
-        print(f"[DEBUG] Assigned diligences count: {assigned_qs.count()}")
         
         if role == 'ADMIN':
-            # ADMIN peut voir toutes les diligences du système
             qs = base_qs
-            print(f"[DEBUG] ADMIN - Using all diligences")
-            # Combine with ImputationAccess and ImputationFile-based querysets (union, remove duplicates)
             final_qs = (qs | imputation_access_qs | imputation_file_qs).distinct()
         elif role == 'DIRECTEUR':
             # DIRECTEUR peut voir toutes les diligences de sa direction ET des services rattachés
@@ -679,10 +677,7 @@ class DiligenceViewSet(viewsets.ModelViewSet):
                 direction_agents = User.objects.filter(profile__service__in=direction_services)
                 agents_direction_qs = base_qs.filter(agents__in=direction_agents).distinct()
                 
-                print(f"[DEBUG] DIRECTEUR - Direction diligences count: {direction_qs.count()}")
-                print(f"[DEBUG] DIRECTEUR - Direction agents diligences count: {agents_direction_qs.count()}")
-                
-                # Combiner les querysets sans utiliser l'union pour éviter l'erreur "unique query"
+                # Combiner les querysets
                 diligence_ids = set()
                 diligence_ids.update(assigned_qs.values_list('id', flat=True))
                 diligence_ids.update(direction_qs.values_list('id', flat=True))
@@ -707,10 +702,7 @@ class DiligenceViewSet(viewsets.ModelViewSet):
                 service_agents = User.objects.filter(profile__service=user_service)
                 agents_qs = base_qs.filter(agents__in=service_agents).distinct()
                 
-                print(f"[DEBUG] SUPERIEUR - Service diligences count: {service_qs.count()}")
-                print(f"[DEBUG] SUPERIEUR - Agents diligences count: {agents_qs.count()}")
-                
-                # Combiner les querysets sans utiliser l'union pour éviter l'erreur "unique query"
+                # Combiner les querysets
                 diligence_ids = set()
                 diligence_ids.update(assigned_qs.values_list('id', flat=True))
                 diligence_ids.update(service_qs.values_list('id', flat=True))
@@ -722,15 +714,24 @@ class DiligenceViewSet(viewsets.ModelViewSet):
             else:
                 final_qs = (assigned_qs | imputation_access_qs | imputation_file_qs).distinct()
         else:
-            # Autres rôles (SECRETAIRE, AGENT) ne voient que leurs diligences assignées + imputées
             final_qs = (assigned_qs | imputation_access_qs | imputation_file_qs).distinct()
-            print(f"[DEBUG] {role} - Using assigned + imputation diligences")
 
-        print(f"[DEBUG] Final queryset count: {final_qs.count()}")
-        
         return final_qs
 
-        # Note: If you want to be more restrictive and only add ImputationAccess for non-admins, adjust logic above.
+    @action(detail=False, methods=['get'], url_path='stats',
+            permission_classes=[permissions.IsAuthenticated],
+            authentication_classes=[JWTAuthentication])
+    def stats(self, request):
+        qs = self.get_queryset()
+        from django.db.models import Count
+        counts = qs.values('statut').annotate(n=Count('id'))
+        result = {c['statut']: c['n'] for c in counts}
+        return Response({
+            'en_attente':  result.get('en_attente', 0),
+            'en_cours':    result.get('en_cours', 0),
+            'finalisee':   result.get('finalisee', 0) + result.get('termine', 0),
+            'total':       qs.count(),
+        })
 
 
     @action(detail=True, methods=['post'], url_path='changer_statut',
@@ -789,63 +790,29 @@ class DiligenceViewSet(viewsets.ModelViewSet):
                 'error': f'Vous n\'avez pas les permissions pour créer une diligence. Rôles autorisés: {", ".join(allowed_roles)}'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        print(f"\nCréation diligence autorisée pour {user.username} (rôle: {role})")
-        print("Données reçues pour création diligence:", request.data)
-        print("Type de request.data:", type(request.data))
-        
         # Si un courrier est sélectionné, pré-remplir la direction et le service
         courrier_id = request.data.get('courrier_id')
-        print("Courrier ID reçu:", courrier_id)
-        
+
         if courrier_id:
             try:
                 courrier = Courrier.objects.select_related('service__direction').get(id=courrier_id)
-                print("Courrier trouvé:", {
-                    'id': courrier.id,
-                    'reference': courrier.reference,
-                    'service_id': courrier.service.id if courrier.service else None,
-                    'service_nom': courrier.service.nom if courrier.service else None,
-                    'direction_id': courrier.service.direction.id if courrier.service and courrier.service.direction else None,
-                    'direction_nom': courrier.service.direction.nom if courrier.service and courrier.service.direction else None
-                })
-                
+
                 if courrier.service and courrier.service.direction:
-                    print(f"Courrier trouvé avec service {courrier.service.id} et direction {courrier.service.direction.id}")
-                    
-                    # Vérifier si request.data est mutable
-                    print("request.data est mutable:", getattr(request.data, '_mutable', True))
-                    
-                    # Convertir en MutableDict si nécessaire
                     if hasattr(request.data, '_mutable'):
                         request.data._mutable = True
-                        print("request.data est maintenant mutable")
 
                     if not request.data.get('direction'):
                         request.data['direction'] = courrier.service.direction.id
-                        print(f"Direction définie à: {courrier.service.direction.id}")
 
                     if not request.data.get('services_concernes_ids'):
                         request.data['services_concernes_ids'] = [courrier.service.id]
-                        print(f"Services concernés définis à: {[courrier.service.id]}")
 
-                    # Remettre à non mutable si nécessaire
                     if hasattr(request.data, '_mutable'):
                         request.data._mutable = False
-                        print("request.data est maintenant non mutable")
-                else:
-                    print("Le courrier n'a pas de service ou de direction associé")
-                    if not courrier.service:
-                        print("Le courrier n'a pas de service")
-                    elif not courrier.service.direction:
-                        print("Le service du courrier n'a pas de direction")
             except Courrier.DoesNotExist:
-                print(f"Courrier {courrier_id} non trouvé")
-            except Exception as e:
-                print(f"Erreur lors de la récupération du courrier: {str(e)}")
-                import traceback
-                print("Traceback:", traceback.format_exc())
-
-        print("\nDonnées finales avant création:", {'direction': request.data.get('direction')})
+                pass
+            except Exception:
+                pass
         
         # Call parent create method
         response = super().create(request, *args, **kwargs)
@@ -1819,6 +1786,12 @@ class PresenceViewSet(viewsets.ModelViewSet):
         date_param = self.request.query_params.get('date')
         if date_param:
             qs = qs.filter(date_presence=date_param)
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            qs = qs.filter(date_presence__gte=start_date)
+        if end_date:
+            qs = qs.filter(date_presence__lte=end_date)
         return qs.order_by('-date_presence', '-heure_arrivee')
 
     def perform_create(self, serializer):
