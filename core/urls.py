@@ -37,6 +37,7 @@ from .ged_views import (
 )
 from django.urls import path, include
 from core.views_stats import PresenceStatsAPIView
+from .views_executive_kpi import ExecutiveKPIView
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
 from .serializers import MyTokenObtainPairSerializer
 
@@ -155,6 +156,7 @@ urlpatterns = [
     path('scan/pre-classify/',  ScanPreClassifyView.as_view(),  name='scan-pre-classify'),
     path('scan/batch-import/',  ScanBatchImportView.as_view(),  name='scan-batch-import'),
     path('scan/watch-status/',  ScanWatchStatusView.as_view(),  name='scan-watch-status'),
+    path('executive-kpi/',      ExecutiveKPIView.as_view(),      name='executive-kpi'),
 ]
 
 
