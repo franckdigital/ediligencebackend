@@ -464,6 +464,7 @@ class PresenceSerializer(serializers.ModelSerializer):
             'id', 'agent', 'agent_details', 'date_presence', 'heure_arrivee', 'heure_depart',
             'heure_sortie', 'sortie_detectee', 'temps_absence_minutes', 'statut_modifiable',
             'statut', 'latitude', 'longitude', 'localisation_valide', 'device_fingerprint',
+            'derniere_latitude_connue', 'derniere_longitude_connue',
             'commentaire', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'agent', 'created_at', 'updated_at', 'localisation_valide']

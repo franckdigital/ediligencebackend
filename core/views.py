@@ -1957,6 +1957,34 @@ class PresenceViewSet(viewsets.ModelViewSet):
         # Multi-sites désactivé : gestion entreprise supprimée pour le départ
         return super().partial_update(request, *args, **kwargs)
 
+    @action(detail=True, methods=['get'], url_path='trace_absence',
+            permission_classes=[permissions.IsAuthenticated],
+            authentication_classes=[JWTAuthentication])
+    def trace_absence(self, request, pk=None):
+        """
+        Retourne la trace GPS et la dernière position connue d'un agent pour
+        une absence prolongée (>1h) détectée automatiquement sur cette présence.
+        """
+        presence = self.get_object()
+        derniere_position = None
+        if presence.derniere_latitude_connue is not None and presence.derniere_longitude_connue is not None:
+            derniere_position = {
+                'latitude': float(presence.derniere_latitude_connue),
+                'longitude': float(presence.derniere_longitude_connue),
+            }
+        return Response({
+            'agent': f"{presence.agent.nom} {presence.agent.prenom or ''}".strip(),
+            'sortie_detectee': presence.sortie_detectee,
+            'heure_sortie': presence.heure_sortie,
+            'temps_absence_minutes': presence.temps_absence_minutes,
+            'derniere_position': derniere_position,
+            'lien_carte': (
+                f"https://www.google.com/maps?q={presence.derniere_latitude_connue},{presence.derniere_longitude_connue}"
+                if derniere_position else None
+            ),
+            'trace': presence.trace_absence or [],
+        })
+
 
 
 

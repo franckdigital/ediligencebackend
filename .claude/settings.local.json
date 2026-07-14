@@ -6,7 +6,28 @@
       "Bash(.env/Scripts/pip.exe show *)",
       "Bash(curl -s -I -X OPTIONS http://localhost:8000/api/auth/me/ -H 'Origin: http://localhost:3000' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,content-type')",
       "Bash(.env/Scripts/python.exe manage.py makemigrations core --name ged_archivage --skip-checks)",
-      "Bash(.env/Scripts/python.exe manage.py check --skip-checks)"
+      "Bash(.env/Scripts/python.exe manage.py check --skip-checks)",
+      "Bash(python -c \"import docx; print\\('python-docx OK'\\)\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\HP\\\\Desktop\\\\NUMERIX AGENCE DIGITALE\\\\lanema\"; echo done)",
+      "Bash(ls clients/management/commands)",
+      "Bash(ls stock/management/commands)",
+      "Bash(ls facturation/management/commands)",
+      "Bash(ls landing/management/commands)",
+      "Bash(python gen_facture_lanema.py)",
+      "Bash(python -c ' *)",
+      "Bash(python manage.py makemigrations core --name absence_prolongee_tracking --dry-run -v 2)",
+      "Bash(python manage.py sqlmigrate core 0113_absence_prolongee_tracking)",
+      "Bash(awk -F: '$1>1772')",
+      "Bash(python manage.py shell -c ' *)",
+      "Bash(grep -v \"app\\\\\\\\\\\\\\\\simple-presence.tsx:\")",
+      "Bash(grep -v \"app\\\\\\\\\\\\\\\\pointage.tsx:\")",
+      "Bash(timeout 90 node_modules/.bin/tsc --noEmit -p .)",
+      "Bash(node_modules/.bin/tsc --noEmit -p .)",
+      "Bash(tee /tmp/tsc_out.txt)",
+      "Bash(npx react-scripts *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\HP\\Desktop\\NUMERIX AGENCE DIGITALE\\lanema"
     ]
   }
 }

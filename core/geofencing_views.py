@@ -106,6 +106,34 @@ class GeofenceAlertViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'])
+    def absences_prolongees(self, request):
+        """Récupérer uniquement les alertes d'absence prolongée (>1h hors zone)"""
+        queryset = self.get_queryset().filter(type_alerte='absence_prolongee').order_by('-timestamp_alerte')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def trace(self, request, pk=None):
+        """
+        Retourne la trace GPS complète (chemin parcouru) et la dernière position connue
+        pour une alerte d'absence prolongée, afin de l'afficher sur une carte.
+        """
+        alerte = self.get_object()
+        return Response({
+            'agent': alerte.agent.get_full_name() or alerte.agent.username,
+            'bureau': alerte.bureau.nom if alerte.bureau else None,
+            'type_alerte': alerte.type_alerte,
+            'duree_hors_zone_minutes': alerte.duree_hors_zone_minutes,
+            'distance_metres': alerte.distance_metres,
+            'derniere_position': {
+                'latitude': float(alerte.latitude_agent),
+                'longitude': float(alerte.longitude_agent),
+            },
+            'lien_carte': f"https://www.google.com/maps?q={alerte.latitude_agent},{alerte.longitude_agent}",
+            'trace': alerte.trace_positions or [],
+        })
+
 
 class GeofenceSettingsViewSet(viewsets.ModelViewSet):
     queryset = GeofenceSettings.objects.all()

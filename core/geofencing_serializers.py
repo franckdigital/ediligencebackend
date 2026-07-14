@@ -9,13 +9,14 @@ class GeofenceAlertSerializer(serializers.ModelSerializer):
     type_alerte_display = serializers.CharField(source='get_type_alerte_display', read_only=True)
     statut_display = serializers.CharField(source='get_statut_display', read_only=True)
     resolu_par_name = serializers.SerializerMethodField()
-    
+    lien_carte = serializers.SerializerMethodField()
+
     class Meta:
         model = GeofenceAlert
         fields = [
             'id', 'agent', 'agent_name', 'bureau', 'bureau_name',
             'type_alerte', 'type_alerte_display', 'latitude_agent', 'longitude_agent',
-            'distance_metres', 'timestamp_alerte', 'heure_detection', 'date_detection',
+            'distance_metres', 'duree_hors_zone_minutes', 'lien_carte', 'timestamp_alerte', 'heure_detection', 'date_detection',
             'en_heures_travail', 'message_alerte', 'statut', 'statut_display',
             'resolu_par', 'resolu_par_name', 'date_resolution', 'commentaire_resolution',
             'notification_envoyee', 'notification_push_envoyee'
@@ -36,6 +37,11 @@ class GeofenceAlertSerializer(serializers.ModelSerializer):
             return f"{obj.resolu_par.first_name} {obj.resolu_par.last_name}".strip() or obj.resolu_par.username
         return None
 
+    def get_lien_carte(self, obj):
+        if obj.latitude_agent is None or obj.longitude_agent is None:
+            return None
+        return f"https://www.google.com/maps?q={obj.latitude_agent},{obj.longitude_agent}"
+
 
 class GeofenceSettingsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -44,6 +50,7 @@ class GeofenceSettingsSerializer(serializers.ModelSerializer):
             'id', 'heure_debut_matin', 'heure_fin_matin', 
             'heure_debut_apres_midi', 'heure_fin_apres_midi',
             'distance_alerte_metres', 'duree_minimale_hors_bureau_minutes', 'frequence_verification_minutes',
+            'seuil_absence_prolongee_minutes',
             'lundi_travaille', 'mardi_travaille', 'mercredi_travaille',
             'jeudi_travaille', 'vendredi_travaille', 'samedi_travaille', 'dimanche_travaille',
             'notification_directeurs', 'notification_superieurs', 'notification_push_active',

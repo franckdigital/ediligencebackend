@@ -1080,6 +1080,20 @@ class Presence(models.Model):
     sortie_detectee = models.BooleanField(default=False, help_text="Sortie détectée par géolocalisation")
     temps_absence_minutes = models.IntegerField(null=True, blank=True, help_text="Durée d'absence en minutes")
     statut_modifiable = models.BooleanField(default=True, help_text="Le statut peut être modifié par le supérieur")
+
+    # Suivi de l'absence prolongée (>1h hors de la zone GPS du site) : dernière position connue + trace
+    derniere_latitude_connue = models.DecimalField(
+        max_digits=10, decimal_places=6, null=True, blank=True,
+        help_text="Latitude de la dernière position connue de l'agent pendant son absence"
+    )
+    derniere_longitude_connue = models.DecimalField(
+        max_digits=10, decimal_places=6, null=True, blank=True,
+        help_text="Longitude de la dernière position connue de l'agent pendant son absence"
+    )
+    trace_absence = models.JSONField(
+        null=True, blank=True,
+        help_text="Historique des positions GPS ([{latitude, longitude, timestamp, distance_metres}, ...]) relevées depuis le début de l'absence"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1364,6 +1378,7 @@ class GeofenceAlert(models.Model):
         ('sortie_zone', 'Sortie de zone'),
         ('entree_zone', 'Entrée en zone'),
         ('hors_horaires', 'Hors horaires de travail'),
+        ('absence_prolongee', 'Absence prolongée (>1h)'),
     ]
     
     STATUT_CHOICES = [
@@ -1399,7 +1414,17 @@ class GeofenceAlert(models.Model):
     # Notifications envoyées
     notification_envoyee = models.BooleanField(default=False)
     notification_push_envoyee = models.BooleanField(default=False)
-    
+
+    # Suivi des absences prolongées (>1h) : durée et trace GPS
+    duree_hors_zone_minutes = models.IntegerField(
+        null=True, blank=True,
+        help_text="Durée continue (en minutes) pendant laquelle l'agent est resté hors de la zone autorisée"
+    )
+    trace_positions = models.JSONField(
+        null=True, blank=True,
+        help_text="Historique des positions GPS ([{latitude, longitude, timestamp, distance_metres}, ...]) relevées pendant l'absence"
+    )
+
     class Meta:
         verbose_name = 'Alerte de géofencing'
         verbose_name_plural = 'Alertes de géofencing'
@@ -1409,10 +1434,10 @@ class GeofenceAlert(models.Model):
             models.Index(fields=['bureau', 'timestamp_alerte']),
             models.Index(fields=['statut', 'en_heures_travail']),
         ]
-    
+
     def __str__(self):
         return f"Alerte {self.get_type_alerte_display()} - {self.agent.username} - {self.timestamp_alerte.strftime('%d/%m/%Y %H:%M')}"
-    
+
     def save(self, *args, **kwargs):
         # Générer automatiquement le message d'alerte
         if not self.message_alerte:
@@ -1422,7 +1447,16 @@ class GeofenceAlert(models.Model):
                 self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} est entré(e) dans la zone du bureau {self.bureau.nom}"
             elif self.type_alerte == 'hors_horaires':
                 self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} est détecté(e) hors des heures de travail"
-        
+            elif self.type_alerte == 'absence_prolongee':
+                duree = self.duree_hors_zone_minutes or 0
+                heures = duree // 60
+                minutes = duree % 60
+                duree_str = f"{heures}h{minutes:02d}" if heures else f"{minutes} min"
+                self.message_alerte = (
+                    f"{self.agent.get_full_name() or self.agent.username} est absent(e) de {self.bureau.nom} "
+                    f"depuis {duree_str} (à {self.distance_metres}m)"
+                )
+
         super().save(*args, **kwargs)
 
 
@@ -1439,6 +1473,10 @@ class GeofenceSettings(models.Model):
     distance_alerte_metres = models.IntegerField(default=200, help_text="Distance en mètres pour déclencher une alerte")
     duree_minimale_hors_bureau_minutes = models.IntegerField(default=5, help_text="Durée minimale hors du bureau en minutes avant alerte")
     frequence_verification_minutes = models.IntegerField(default=5, help_text="Fréquence de vérification de la position en minutes")
+    seuil_absence_prolongee_minutes = models.IntegerField(
+        default=60,
+        help_text="Durée continue (en minutes) hors de la zone du site au-delà de laquelle une absence prolongée est détectée, tracée et notifiée (défaut : 60 min = 1h)"
+    )
     
     # Jours de travail
     lundi_travaille = models.BooleanField(default=True)

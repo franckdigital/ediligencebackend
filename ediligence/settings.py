@@ -21,6 +21,8 @@ DEBUG = True
 ALLOWED_HOSTS = [
     "e-diligence.numerix.digital",
     "api-diligence.numerix.digital",
+    "e-diligence.lanema-ci.com",
+    "api-e-diligence.lanema-ci.com",
     "localhost",
     "127.0.0.1",
     '10.0.2.2',

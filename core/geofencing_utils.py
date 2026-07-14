@@ -140,6 +140,62 @@ def validate_coordinates(lat, lon):
     except (ValueError, TypeError):
         return False
 
+def get_gps_reference_for_user(user):
+    """
+    Résout le point de référence GPS (zone autorisée) d'un agent, avec la même
+    priorité que la validation de pointage (voir PresenceViewSet.perform_create) :
+      1. Palier actif du site (UserProfile.site) avec coordonnées GPS
+      2. Coordonnées GPS directes du site
+      3. Bureau de l'Agent (fallback)
+
+    Args:
+        user: instance django.contrib.auth.models.User
+
+    Returns:
+        dict {'latitude': float, 'longitude': float, 'rayon_metres': float, 'nom': str, 'bureau': Bureau|None}
+        ou None si aucune référence GPS n'est configurée pour cet agent.
+    """
+    from .models import SitePalier
+
+    user_profile = getattr(user, 'profile', None)
+    user_site = getattr(user_profile, 'site', None) if user_profile else None
+    agent_obj = getattr(user, 'agent_profile', None)
+    bureau = getattr(agent_obj, 'bureau', None) if agent_obj else None
+
+    if user_site:
+        palier = SitePalier.objects.filter(
+            site=user_site, est_actif=True,
+            latitude__isnull=False, longitude__isnull=False
+        ).order_by('ordre').first()
+        if palier:
+            return {
+                'latitude': float(palier.latitude),
+                'longitude': float(palier.longitude),
+                'rayon_metres': float(palier.rayon_pointage),
+                'nom': f"{user_site.nom} — {palier.nom}",
+                'bureau': bureau,
+            }
+        if user_site.latitude and user_site.longitude:
+            return {
+                'latitude': float(user_site.latitude),
+                'longitude': float(user_site.longitude),
+                'rayon_metres': float(user_site.rayon_pointage),
+                'nom': user_site.nom,
+                'bureau': bureau,
+            }
+
+    if bureau and bureau.latitude_centre and bureau.longitude_centre:
+        return {
+            'latitude': float(bureau.latitude_centre),
+            'longitude': float(bureau.longitude_centre),
+            'rayon_metres': float(bureau.rayon_metres) if bureau.rayon_metres else 200.0,
+            'nom': user_site.nom if user_site else bureau.nom,
+            'bureau': bureau,
+        }
+
+    return None
+
+
 def is_in_cote_divoire(lat, lon):
     """
     Vérifier si les coordonnées sont en Côte d'Ivoire (approximatif)
