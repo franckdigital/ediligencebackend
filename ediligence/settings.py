@@ -9,9 +9,13 @@ from pathlib import Path
 import os
 from datetime import timedelta
 from celery.schedules import crontab
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Charge .env (manage.py, celery, shell) ; les variables déjà définies (systemd) gardent la priorité
+load_dotenv(BASE_DIR / '.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-n5e0po2v6y9=z5h#)p^f@!q3v3&amp;y=0g4x#f8_h=w=k#6z5x$q')
