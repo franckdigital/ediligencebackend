@@ -1,4 +1,4 @@
-Django>=4.0
+Django>=5.2,<5.3
 PyMySQL>=1.0
 pytz
 python-dotenv
