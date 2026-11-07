@@ -106,7 +106,7 @@ class Command(BaseCommand):
 
         site, _ = Site.objects.get_or_create(
             nom="LANEMA — Siège Abidjan",
-            defaults={"type_site": "siege", "ville": "Abidjan",
+            defaults={"code": "LANEMA-SIEGE", "type_site": "siege", "ville": "Abidjan",
                       "adresse": "Rue du Commerce, Plateau, Abidjan"}
         )
 

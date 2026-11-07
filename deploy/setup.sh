@@ -1,9 +1,9 @@
 #!/bin/bash
-# Installation initiale sur le VPS (après git clone dans /var/www/numerix/ediligencebackend)
+# Installation initiale sur le VPS (après git clone dans /var/www/ediligence/backend)
 set -e
-APP=/var/www/numerix/ediligencebackend
+APP=/var/www/ediligence/backend
 sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx python3-venv python3-pip redis-server
-sudo mkdir -p /var/www/numerix/home
+sudo mkdir -p /var/www/ediligence/frontend
 cd $APP
 python3 -m venv venv
 source venv/bin/activate
@@ -12,7 +12,7 @@ pip install -r requirements.txt gunicorn
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 mkdir -p logs media scan_entrant
-sudo chown -R www-data:www-data $APP /var/www/numerix/home
+sudo chown -R www-data:www-data $APP /var/www/ediligence/frontend
 sudo cp deploy/systemd/ediligence*.service /etc/systemd/system/
 sudo cp deploy/nginx/ediligence /etc/nginx/sites-available/ediligence
 sudo ln -sf /etc/nginx/sites-available/ediligence /etc/nginx/sites-enabled/ediligence

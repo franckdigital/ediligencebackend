@@ -6,10 +6,10 @@ After=network.target redis-server.service
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/numerix/ediligencebackend
+WorkingDirectory=/var/www/ediligence/backend
 Environment=DJANGO_SETTINGS_MODULE=ediligence.settings
-EnvironmentFile=-/var/www/numerix/ediligencebackend/.env
-ExecStart=/var/www/numerix/ediligencebackend/venv/bin/celery -A ediligence beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+EnvironmentFile=-/var/www/ediligence/backend/.env
+ExecStart=/var/www/ediligence/backend/venv/bin/celery -A ediligence beat --loglevel=info --schedule=/tmp/celerybeat-schedule
 Restart=always
 RestartSec=5
 

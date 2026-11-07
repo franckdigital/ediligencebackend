@@ -7,15 +7,15 @@ Wants=redis-server.service
 Type=simple
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/numerix/ediligencebackend
+WorkingDirectory=/var/www/ediligence/backend
 Environment=DJANGO_SETTINGS_MODULE=ediligence.settings
-Environment=PYTHONPATH=/var/www/numerix/ediligencebackend
-Environment=PATH=/var/www/numerix/ediligencebackend/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-EnvironmentFile=-/var/www/numerix/ediligencebackend/.env
-ExecStart=/var/www/numerix/ediligencebackend/venv/bin/gunicorn ediligence.wsgi:application \
-    --bind 127.0.0.1:9016 --workers 3 --timeout 120 \
-    --access-logfile /var/www/numerix/ediligencebackend/logs/access.log \
-    --error-logfile /var/www/numerix/ediligencebackend/logs/error.log
+Environment=PYTHONPATH=/var/www/ediligence/backend
+Environment=PATH=/var/www/ediligence/backend/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/var/www/ediligence/backend/.env
+ExecStart=/var/www/ediligence/backend/venv/bin/gunicorn ediligence.wsgi:application \
+    --bind 127.0.0.1:9018 --workers 3 --timeout 120 \
+    --access-logfile /var/www/ediligence/backend/logs/access.log \
+    --error-logfile /var/www/ediligence/backend/logs/error.log
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=3
@@ -25,7 +25,7 @@ StandardError=journal
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
-ReadWritePaths=/var/www/numerix/ediligencebackend
+ReadWritePaths=/var/www/ediligence/backend
 ReadWritePaths=/tmp
 
 [Install]
