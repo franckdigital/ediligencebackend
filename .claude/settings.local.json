@@ -24,7 +24,15 @@
       "Bash(timeout 90 node_modules/.bin/tsc --noEmit -p .)",
       "Bash(node_modules/.bin/tsc --noEmit -p .)",
       "Bash(tee /tmp/tsc_out.txt)",
-      "Bash(npx react-scripts *)"
+      "Bash(npx react-scripts *)",
+      "Bash(python manage.py makemigrations core --name gps_inactif_alert)",
+      "Bash(python manage.py makemigrations core --check --dry-run)",
+      "Bash(python -c \"import py_compile; [py_compile.compile\\(f, doraise=True\\) for f in ['core/models.py','core/tasks_presence.py','core/geofencing_views.py','core/geofencing_serializers.py','ediligence/settings.py','core/migrations/0114_gps_inactif_alert.py']]\")",
+      "Bash(python -c \"import py_compile; [py_compile.compile\\(f, doraise=True\\) for f in ['core/models.py','core/tasks_presence.py','core/migrations/0115_presence_depart_a_verifier_statut.py']]\")",
+      "Bash(node --check src/pages/presences/TableauPresencesClean.js)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(xargs grep -l \"easConfig\\\\|expoConfig\")",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('core/notifications.py', doraise=True\\)\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\HP\\Desktop\\NUMERIX AGENCE DIGITALE\\lanema"

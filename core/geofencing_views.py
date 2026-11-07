@@ -127,10 +127,13 @@ class GeofenceAlertViewSet(viewsets.ModelViewSet):
             'duree_hors_zone_minutes': alerte.duree_hors_zone_minutes,
             'distance_metres': alerte.distance_metres,
             'derniere_position': {
-                'latitude': float(alerte.latitude_agent),
-                'longitude': float(alerte.longitude_agent),
+                'latitude': float(alerte.latitude_agent) if alerte.latitude_agent is not None else None,
+                'longitude': float(alerte.longitude_agent) if alerte.longitude_agent is not None else None,
             },
-            'lien_carte': f"https://www.google.com/maps?q={alerte.latitude_agent},{alerte.longitude_agent}",
+            'lien_carte': (
+                f"https://www.google.com/maps?q={alerte.latitude_agent},{alerte.longitude_agent}"
+                if alerte.latitude_agent is not None and alerte.longitude_agent is not None else None
+            ),
             'trace': alerte.trace_positions or [],
         })
 

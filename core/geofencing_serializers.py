@@ -50,7 +50,7 @@ class GeofenceSettingsSerializer(serializers.ModelSerializer):
             'id', 'heure_debut_matin', 'heure_fin_matin', 
             'heure_debut_apres_midi', 'heure_fin_apres_midi',
             'distance_alerte_metres', 'duree_minimale_hors_bureau_minutes', 'frequence_verification_minutes',
-            'seuil_absence_prolongee_minutes',
+            'seuil_absence_prolongee_minutes', 'seuil_gps_inactif_minutes',
             'lundi_travaille', 'mardi_travaille', 'mercredi_travaille',
             'jeudi_travaille', 'vendredi_travaille', 'samedi_travaille', 'dimanche_travaille',
             'notification_directeurs', 'notification_superieurs', 'notification_push_active',

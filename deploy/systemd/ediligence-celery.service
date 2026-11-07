@@ -1,0 +1,17 @@
+[Unit]
+Description=eDiligence Celery Worker
+After=network.target redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/numerix/ediligencebackend
+Environment=DJANGO_SETTINGS_MODULE=ediligence.settings
+EnvironmentFile=-/var/www/numerix/ediligencebackend/.env
+ExecStart=/var/www/numerix/ediligencebackend/venv/bin/celery -A ediligence worker --loglevel=info --concurrency=2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

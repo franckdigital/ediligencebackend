@@ -253,7 +253,7 @@ def send_push_notification(user, alert):
             'type': 'geofence_alert',
             'alert_id': str(alert.id),
             'agent_name': alert.agent.get_full_name() or alert.agent.username,
-            'bureau_name': alert.bureau.nom,
+            'bureau_name': alert.bureau.nom if alert.bureau else None,
             'distance': str(alert.distance_metres),
             'timestamp': alert.timestamp_alerte.isoformat()
         }
@@ -281,14 +281,22 @@ def send_push_notification(user, alert):
 
 
 def send_fcm_notification(token, title, body, data):
-    """Envoyer une notification FCM pour Android"""
+    """
+    Envoyer une notification FCM pour Android — appelé uniquement pour un token FCM natif
+    (l'app mobile enregistre normalement un token Expo Push, voir send_push_to_user, qui
+    ne passe jamais par ici en fonctionnement normal).
+
+    ATTENTION : utilise l'ancienne API FCM legacy (https://fcm.googleapis.com/fcm/send),
+    définitivement désactivée par Google en juin 2024. Cet appel échoue systématiquement
+    tant que ce n'est pas migré vers l'API FCM v1 (OAuth2 + compte de service), qui
+    nécessite des identifiants Google Cloud non configurés ici.
+    """
     try:
-        # Configuration FCM (à adapter selon votre configuration)
         fcm_server_key = getattr(settings, 'FCM_SERVER_KEY', None)
         if not fcm_server_key:
             print("FCM_SERVER_KEY non configuré")
             return False
-        
+
         url = 'https://fcm.googleapis.com/fcm/send'
         headers = {
             'Authorization': f'key={fcm_server_key}',
@@ -322,19 +330,15 @@ def send_fcm_notification(token, title, body, data):
 
 
 def send_apns_notification(token, title, body, data):
-    """Envoyer une notification APNS pour iOS"""
-    try:
-        # Configuration APNS (à adapter selon votre configuration)
-        # Vous devrez configurer les certificats APNS appropriés
-        
-        # Pour l'instant, retourner True comme placeholder
-        # Dans une implémentation réelle, vous utiliseriez une bibliothèque comme PyAPNs2
-        print(f"APNS notification à implémenter pour token: {token[:20]}...")
-        return True
-        
-    except Exception as e:
-        print(f"Erreur lors de l'envoi APNS: {e}")
-        return False
+    """
+    Envoyer une notification APNS pour iOS — appelé uniquement pour un token APNS natif
+    (l'app mobile enregistre normalement un token Expo Push, voir send_push_to_user, qui
+    ne passe jamais par ici en fonctionnement normal).
+
+    NON IMPLÉMENTÉ : aucun certificat/clé APNS n'est configuré ici. N'envoie rien.
+    """
+    print(f"⚠️ APNS natif non implémenté — notification NON envoyée pour token {token[:20]}...")
+    return False
 
 
 def send_web_notification(token, title, body, data):

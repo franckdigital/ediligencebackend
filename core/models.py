@@ -1061,6 +1061,7 @@ class Presence(models.Model):
         ('absent', 'Absent'),
         ('en mission', 'En mission'),
         ('permission accordée', 'Permission accordée'),
+        ('depart_a_verifier', 'Départ à vérifier'),
     ]
     # id: UUID ou BigAutoField (par défaut)
     agent = models.ForeignKey('Agent', on_delete=models.CASCADE, related_name='presences')
@@ -1379,6 +1380,7 @@ class GeofenceAlert(models.Model):
         ('entree_zone', 'Entrée en zone'),
         ('hors_horaires', 'Hors horaires de travail'),
         ('absence_prolongee', 'Absence prolongée (>1h)'),
+        ('gps_inactif', 'GPS inactif / désactivé'),
     ]
     
     STATUT_CHOICES = [
@@ -1388,13 +1390,18 @@ class GeofenceAlert(models.Model):
     ]
     
     agent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='geofence_alerts')
-    bureau = models.ForeignKey('Bureau', on_delete=models.CASCADE, related_name='geofence_alerts')
+    # Nullable : un agent suivi via un Site/Palier (plutôt que l'ancien modèle Bureau) peut
+    # ne pas avoir de Bureau assigné (Agent.bureau) — voir get_gps_reference_for_user().
+    bureau = models.ForeignKey('Bureau', on_delete=models.CASCADE, related_name='geofence_alerts', null=True, blank=True)
     type_alerte = models.CharField(max_length=20, choices=ALERT_TYPE_CHOICES, default='sortie_zone')
     
-    # Position de l'agent au moment de l'alerte
-    latitude_agent = models.DecimalField(max_digits=22, decimal_places=17)
-    longitude_agent = models.DecimalField(max_digits=22, decimal_places=17)
-    distance_metres = models.IntegerField(help_text="Distance en mètres par rapport au centre du bureau")
+    # Position de l'agent au moment de l'alerte.
+    # Nullable : une alerte 'gps_inactif' peut être levée alors qu'aucune position
+    # n'a jamais été reçue de l'agent (GPS coupé dès l'arrivée) — la position est
+    # alors réellement inconnue, pas "0,0".
+    latitude_agent = models.DecimalField(max_digits=22, decimal_places=17, null=True, blank=True)
+    longitude_agent = models.DecimalField(max_digits=22, decimal_places=17, null=True, blank=True)
+    distance_metres = models.IntegerField(null=True, blank=True, help_text="Distance en mètres par rapport au centre du bureau (inconnue si GPS inactif)")
     
     # Informations temporelles
     timestamp_alerte = models.DateTimeField(auto_now_add=True)
@@ -1441,10 +1448,11 @@ class GeofenceAlert(models.Model):
     def save(self, *args, **kwargs):
         # Générer automatiquement le message d'alerte
         if not self.message_alerte:
+            bureau_nom = self.bureau.nom if self.bureau else "sa zone de rattachement"
             if self.type_alerte == 'sortie_zone':
-                self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} s'est éloigné(e) de {self.distance_metres}m du bureau {self.bureau.nom}"
+                self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} s'est éloigné(e) de {self.distance_metres}m du bureau {bureau_nom}"
             elif self.type_alerte == 'entree_zone':
-                self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} est entré(e) dans la zone du bureau {self.bureau.nom}"
+                self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} est entré(e) dans la zone du bureau {bureau_nom}"
             elif self.type_alerte == 'hors_horaires':
                 self.message_alerte = f"{self.agent.get_full_name() or self.agent.username} est détecté(e) hors des heures de travail"
             elif self.type_alerte == 'absence_prolongee':
@@ -1453,8 +1461,18 @@ class GeofenceAlert(models.Model):
                 minutes = duree % 60
                 duree_str = f"{heures}h{minutes:02d}" if heures else f"{minutes} min"
                 self.message_alerte = (
-                    f"{self.agent.get_full_name() or self.agent.username} est absent(e) de {self.bureau.nom} "
+                    f"{self.agent.get_full_name() or self.agent.username} est absent(e) de {bureau_nom} "
                     f"depuis {duree_str} (à {self.distance_metres}m)"
+                )
+            elif self.type_alerte == 'gps_inactif':
+                duree = self.duree_hors_zone_minutes or 0
+                heures = duree // 60
+                minutes = duree % 60
+                duree_str = f"{heures}h{minutes:02d}" if heures else f"{minutes} min"
+                self.message_alerte = (
+                    f"Plus aucune position GPS reçue de {self.agent.get_full_name() or self.agent.username} "
+                    f"depuis {duree_str} (rattaché(e) à {bureau_nom}) — surveillance de présence impossible, "
+                    f"vérifiez que la localisation est activée sur son appareil"
                 )
 
         super().save(*args, **kwargs)
@@ -1476,6 +1494,10 @@ class GeofenceSettings(models.Model):
     seuil_absence_prolongee_minutes = models.IntegerField(
         default=60,
         help_text="Durée continue (en minutes) hors de la zone du site au-delà de laquelle une absence prolongée est détectée, tracée et notifiée (défaut : 60 min = 1h)"
+    )
+    seuil_gps_inactif_minutes = models.IntegerField(
+        default=30,
+        help_text="Durée (en minutes) sans aucune position GPS reçue d'un agent présent au-delà de laquelle une alerte 'GPS inactif' est levée — évite qu'un agent désactivant sa localisation devienne invisible à la détection de sortie (défaut : 30 min)"
     )
     
     # Jours de travail

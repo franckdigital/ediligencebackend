@@ -44,6 +44,72 @@ def _build_trace(agent_user, since, until, ref_lat, ref_lon):
     return trace
 
 
+def _raise_gps_inactif_alert(agent, agent_user, ref, silence_minutes, now):
+    """
+    Crée une alerte 'gps_inactif' (dédupliquée sur 2h, comme les absences prolongées)
+    et notifie la hiérarchie lorsqu'un agent présent n'émet plus aucune position GPS.
+    Contrairement à une absence prolongée, on ne sait pas si l'agent est réellement
+    sorti — la position est inconnue — donc on ne marque pas la présence comme sortie,
+    on se contente de rendre visible que la surveillance automatique est aveugle.
+    """
+    # Dédup sur l'agent + le type d'alerte (pas sur le bureau : celui-ci peut être
+    # inconnu — voir get_gps_reference_for_user — et cette fonction est rappelée à
+    # chaque tick de 5 min tant que le GPS reste muet, donc sans cette dédup on
+    # spammerait la hiérarchie toutes les 5 minutes au lieu de toutes les 2 heures.
+    alerte_recente = GeofenceAlert.objects.filter(
+        agent=agent_user, type_alerte='gps_inactif',
+        statut='active', timestamp_alerte__gte=now - timedelta(hours=2)
+    ).exists()
+    if alerte_recente:
+        return
+
+    GeofenceAlert.objects.create(
+        agent=agent_user,
+        bureau=ref.get('bureau'),
+        type_alerte='gps_inactif',
+        latitude_agent=None,
+        longitude_agent=None,
+        distance_metres=None,
+        en_heures_travail=True,
+        duree_hors_zone_minutes=silence_minutes,
+    )
+
+    superieurs = User.objects.filter(
+        profile__role__in=['ADMIN', 'DIRECTEUR', 'SOUS_DIRECTEUR', 'CHEF_SERVICE', 'SUPERIEUR'],
+        profile__service=agent.service
+    ) if agent.service else User.objects.filter(profile__role__in=['ADMIN', 'DIRECTEUR'])
+    superieurs = set(superieurs)
+
+    heures = silence_minutes // 60
+    minutes = silence_minutes % 60
+    duree_str = f"{heures}h{minutes:02d}" if heures else f"{minutes} min"
+
+    agent_name = f"{agent.nom} {agent.prenom or ''}".strip() or agent_user.username
+    titre = f"GPS inactif : {agent_name}"
+    message = (
+        f"Plus aucune position GPS reçue de {agent_name} depuis {duree_str}. "
+        f"Sa sortie éventuelle ne peut pas être détectée automatiquement — vérifiez que "
+        f"la localisation est activée sur son appareil."
+    )
+
+    for superieur in superieurs:
+        Notification.objects.create(
+            user=superieur,
+            type_notif='rappel',
+            contenu=message,
+            message=message,
+            lien='/presences',
+            read=False,
+        )
+        send_push_to_user(superieur, titre, message, data={
+            'type': 'gps_inactif',
+            'agent_id': str(agent_user.id),
+            'duree_minutes': str(silence_minutes),
+        })
+
+    logger.info(f"📡 Alerte GPS inactif : {len(superieurs)} supérieur(s) notifié(s) pour {agent_user.username}")
+
+
 @shared_task
 def check_agent_exits():
     """
@@ -78,8 +144,10 @@ def check_agent_exits():
     settings_obj = GeofenceSettings.objects.first()
     seuil_minutes = settings_obj.seuil_absence_prolongee_minutes if settings_obj else 60
     time_threshold = timedelta(minutes=seuil_minutes)
+    gps_seuil_minutes = settings_obj.seuil_gps_inactif_minutes if settings_obj else 30
+    gps_time_threshold = timedelta(minutes=gps_seuil_minutes)
 
-    logger.info(f"⏰ Heure actuelle: {current_time} - Seuil d'absence prolongée: {seuil_minutes} min")
+    logger.info(f"⏰ Heure actuelle: {current_time} - Seuil d'absence prolongée: {seuil_minutes} min - Seuil GPS inactif: {gps_seuil_minutes} min")
 
     # Récupérer toutes les présences du jour qui ne sont pas encore marquées comme sorties
     presences_today = Presence.objects.filter(
@@ -112,8 +180,20 @@ def check_agent_exits():
                 timestamp__date=current_date
             ).order_by('-timestamp').first()
 
-            if not last_location:
-                logger.info(f"❌ Aucune position trouvée pour {agent_user.username}")
+            # Un agent qui coupe son GPS (ou dont l'app cesse d'émettre) ne doit pas devenir
+            # invisible à la surveillance : on distingue "aucune position reçue depuis l'arrivée"
+            # et "plus aucune position fraîche depuis un moment" du cas normal (position récente).
+            if last_location:
+                gps_silence_since = last_location.timestamp
+            else:
+                arrivee_naive = datetime.combine(current_date, presence.heure_arrivee)
+                gps_silence_since = timezone.make_aware(arrivee_naive) if timezone.is_naive(arrivee_naive) else arrivee_naive
+
+            gps_silence = now - gps_silence_since
+            if gps_silence >= gps_time_threshold:
+                silence_minutes = int(gps_silence.total_seconds() / 60)
+                logger.warning(f"📡 GPS inactif depuis {silence_minutes} min pour {agent_user.username} — surveillance de sortie impossible")
+                _raise_gps_inactif_alert(agent, agent_user, ref, silence_minutes, now)
                 continue
 
             distance = calculate_distance(
@@ -178,26 +258,26 @@ def check_agent_exits():
             agent_name = f"{agent.nom} {agent.prenom or ''}".strip() or agent_user.username
             maps_link = f"https://www.google.com/maps?q={last_location.latitude},{last_location.longitude}"
 
-            # Créer une alerte de géofencing dédiée si un bureau est résolvable
-            # (visible dans le tableau de bord des alertes existant, avec workflow de résolution)
-            bureau = ref.get('bureau')
-            if bureau:
-                alerte_recente = GeofenceAlert.objects.filter(
-                    agent=agent_user, bureau=bureau, type_alerte='absence_prolongee',
-                    statut='active', timestamp_alerte__gte=now - timedelta(hours=2)
-                ).exists()
-                if not alerte_recente:
-                    GeofenceAlert.objects.create(
-                        agent=agent_user,
-                        bureau=bureau,
-                        type_alerte='absence_prolongee',
-                        latitude_agent=last_location.latitude,
-                        longitude_agent=last_location.longitude,
-                        distance_metres=int(distance),
-                        en_heures_travail=True,
-                        duree_hors_zone_minutes=duree_minutes,
-                        trace_positions=trace,
-                    )
+            # Créer une alerte de géofencing dédiée (visible dans le tableau de bord des
+            # alertes existant, avec workflow de résolution). bureau peut être None (agent
+            # suivi via Site/Palier sans Bureau assigné) : on crée quand même l'alerte,
+            # dédupliquée sur l'agent (pas le bureau, qui peut manquer).
+            alerte_recente = GeofenceAlert.objects.filter(
+                agent=agent_user, type_alerte='absence_prolongee',
+                statut='active', timestamp_alerte__gte=now - timedelta(hours=2)
+            ).exists()
+            if not alerte_recente:
+                GeofenceAlert.objects.create(
+                    agent=agent_user,
+                    bureau=ref.get('bureau'),
+                    type_alerte='absence_prolongee',
+                    latitude_agent=last_location.latitude,
+                    longitude_agent=last_location.longitude,
+                    distance_metres=int(distance),
+                    en_heures_travail=True,
+                    duree_hors_zone_minutes=duree_minutes,
+                    trace_positions=trace,
+                )
 
             # Notifier la hiérarchie (in-app + push), avec durée et position
             superieurs = User.objects.filter(
@@ -245,9 +325,14 @@ def check_agent_exits():
 @shared_task
 def auto_close_forgotten_departures():
     """
-    Fermer automatiquement les présences dont le départ n'a pas été pointé
-    après la fin de la journée de travail (16h30)
-    Cette tâche s'exécute à 17h00 pour marquer les départs oubliés à 16h30
+    Traiter les présences dont le départ n'a pas été pointé après la fin de la
+    journée de travail (16h30). Exécutée à 17h00 (voir CELERY_BEAT_SCHEDULE).
+
+    - Si une position GPS après 16h30 prouve que l'agent s'est éloigné : la présence
+      est fermée avec cette heure de départ détectée.
+    - Sinon (aucune donnée GPS exploitable) : on ne devine pas une heure de départ.
+      Le statut passe à 'depart_a_verifier' pour qu'un humain tranche, plutôt que de
+      fermer silencieusement à 16h30 comme si le départ était confirmé.
     """
     logger.info("🔚 Vérification des départs oubliés...")
 
@@ -301,13 +386,21 @@ def auto_close_forgotten_departures():
                         logger.info(f"📍 Départ détecté via GPS à {detected_departure_time} (distance: {distance:.1f}m)")
                         break
 
-            # Si on a détecté l'heure via GPS, l'utiliser, sinon 16h30 par défaut
             if detected_departure_time:
+                # Preuve GPS d'un départ réel : on peut fermer la présence en confiance.
                 presence.heure_depart = detected_departure_time
-                presence.commentaire = f"{presence.commentaire or ''} | Départ détecté automatiquement via GPS".strip()
+                presence.commentaire = f"{presence.commentaire or ''} | Départ détecté automatiquement via GPS".strip(' |')
             else:
-                presence.heure_depart = time(16, 30)
-                presence.commentaire = f"{presence.commentaire or ''} | Départ automatique à 16h30 (non pointé, pas de données GPS)".strip()
+                # Aucune preuve GPS (position jamais reçue, ou agent toujours dans la zone
+                # d'après sa dernière position) : on ne fabrique pas une heure de départ à
+                # 16h30 comme si de rien n'était. On laisse heure_depart vide et on bascule
+                # la présence en "Départ à vérifier" pour qu'un humain tranche le lendemain
+                # (agent resté tard sans pointer, GPS désactivé en fin de journée, etc.).
+                presence.statut = 'depart_a_verifier'
+                presence.commentaire = (
+                    f"{presence.commentaire or ''} | Départ non pointé et aucune donnée GPS "
+                    f"disponible après 16h30 — à vérifier manuellement"
+                ).strip(' |')
 
             presence.save()
 
